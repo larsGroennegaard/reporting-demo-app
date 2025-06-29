@@ -4,6 +4,7 @@
 import { useState, useEffect } from 'react';
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
+import Table from './components/Table'; // Import the new Table component
 
 export default function HomePage() {
   const [outcome, setOutcome] = useState('');
@@ -54,7 +55,7 @@ export default function HomePage() {
         const response = await fetch('/api/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(currentConfig), // Send the whole config
+          body: JSON.stringify(currentConfig),
         });
         const data = await response.json();
         setKpiData(data.kpiData);
@@ -66,7 +67,7 @@ export default function HomePage() {
       setIsLoading(false);
     };
     fetchData();
-  }, [outcome, timePeriod, companyCountry, numberOfEmployees, chartMode, chartMetric, segmentationProperty, multiMetrics]); // Re-run when any config changes
+  }, [outcome, timePeriod, companyCountry, numberOfEmployees, chartMode, chartMetric, segmentationProperty, multiMetrics]);
 
   const handleMultiMetricChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = event.target;
@@ -76,6 +77,7 @@ export default function HomePage() {
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
       <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
+        {/* --- Configuration Panel JSX (unchanged) --- */}
         <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
         <div className="space-y-6">
             <div className="mb-6"><label className="block text-sm font-medium text-gray-400">Report Type</label><p className="text-lg font-semibold text-indigo-400">Outcome Analysis</p></div>
@@ -87,6 +89,7 @@ export default function HomePage() {
             </div>
         </div>
       </div>
+      
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -97,10 +100,14 @@ export default function HomePage() {
             </>) : (<p className="col-span-3">No data available.</p>
           )}
         </div>
-        <div className="mt-8">
-            {/* UPDATED: Pass the new props to the Chart component */}
+        
+        <div className="space-y-8">
             <Chart data={chartData} mode={chartMode} config={currentConfig} />
+            
+            {/* NEW: Table component is now displayed */}
+            <Table data={chartData} />
         </div>
+
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
           <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">{JSON.stringify(currentConfig, null, 2)}</pre>
