@@ -3,20 +3,21 @@
 
 import { useState, useEffect } from 'react';
 import KpiCard from './components/KpiCard';
+import Chart from './components/Chart'; // Import the new Chart component
 
 export default function HomePage() {
   // --- STATE MANAGEMENT ---
   const [outcome, setOutcome] = useState('');
-  const [timePeriod, setTimePeriod] = useState('this_year');
+  const [timePeriod, setTimePeriod] =useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
-  const [numberOfEmployees, setNumberOfEmployees] = useState('all'); // NEW state for employee filter
+  const [numberOfEmployees, setNumberOfEmployees] = useState('all');
 
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const [outcomeOptions, setOutcomeOptions] = useState<string[]>([]);
   const [countryOptions, setCountryOptions] = useState<string[]>([]);
-  const [employeeOptions, setEmployeeOptions] = useState<string[]>([]); // NEW state for employee options
+  const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
 
   // --- DATA FETCHING ---
   useEffect(() => {
@@ -26,7 +27,7 @@ export default function HomePage() {
         const data = await response.json();
         setOutcomeOptions(data.outcomes || []);
         setCountryOptions(data.countries || []);
-        setEmployeeOptions(data.employeeBuckets || []); // NEW: set employee options
+        setEmployeeOptions(data.employeeBuckets || []);
         if (data.outcomes && data.outcomes.length > 0) {
             setOutcome(data.outcomes[0]);
         }
@@ -39,14 +40,13 @@ export default function HomePage() {
 
   useEffect(() => {
     if (!outcome) return;
-
     const fetchData = async () => {
       setIsLoading(true);
       try {
         const response = await fetch('/api/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outcome, timePeriod, companyCountry, numberOfEmployees }), // NEW: send employee filter
+          body: JSON.stringify({ outcome, timePeriod, companyCountry, numberOfEmployees }),
         });
         const data = await response.json();
         setReportData(data);
@@ -56,11 +56,10 @@ export default function HomePage() {
       }
       setIsLoading(false);
     };
-
     fetchData();
-  }, [outcome, timePeriod, companyCountry, numberOfEmployees]); // NEW: re-run on employee filter change
+  }, [outcome, timePeriod, companyCountry, numberOfEmployees]);
 
-  const currentConfig = { outcome, timePeriod, companyCountry, numberOfEmployees }; // NEW: add to debug view
+  const currentConfig = { outcome, timePeriod, companyCountry, numberOfEmployees };
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
@@ -95,7 +94,6 @@ export default function HomePage() {
                   {countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}
                 </select>
               </div>
-              {/* NEW: Number of Employees Dropdown */}
               <div>
                 <label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label>
                 <select id="numberOfEmployees" name="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
@@ -117,6 +115,12 @@ export default function HomePage() {
             </>) : (<p className="col-span-3">No data available.</p>
           )}
         </div>
+        
+        {/* NEW: Chart component is now displayed */}
+        <div className="mt-8">
+            <Chart />
+        </div>
+
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
           <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
