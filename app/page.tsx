@@ -1,7 +1,7 @@
 // app/page.tsx
 "use client"; 
 
-import { useState, useEffect, useMemo } from 'react'; // Import useMemo
+import { useState, useEffect, useMemo } from 'react';
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
 import Table from './components/Table';
@@ -9,30 +9,27 @@ import Table from './components/Table';
 interface SelectedMetrics {
   [stageName: string]: ('deals' | 'value')[];
 }
-// NEW: Define the structure for a single KPI card's configuration
 interface KpiCardConfig {
     id: number;
-    metric: string; // e.g., "NewBiz_value"
+    metric: string;
 }
 
 export default function HomePage() {
-  // --- STATE MANAGEMENT ---
   const [selectedMetrics, setSelectedMetrics] = useState<SelectedMetrics>({ 'NewBiz': ['deals', 'value'], 'SQL': ['deals'] });
-  // NEW: State to manage the configuration of the KPI cards
   const [kpiCardConfig, setKpiCardConfig] = useState<KpiCardConfig[]>([
-    { id: 1, metric: 'NewBiz_deals' },
-    { id: 2, metric: 'NewBiz_value' },
-    { id: 3, metric: 'SQL_deals' },
+    { id: 1, metric: 'NewBiz_deals' }, { id: 2, metric: 'NewBiz_value' }, { id: 3, metric: 'SQL_deals' },
   ]);
-
-  // Other states remain the same...
   const [timePeriod, setTimePeriod] = useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
   const [numberOfEmployees, setNumberOfEmployees] = useState('all');
   const [chartMode, setChartMode] = useState('single_segmented');
-  const [chartMetric, setChartMetric] = useState('totalValue');
+  
+  // This is now the single source of truth for the chart's "single metric" mode
+  const [singleChartMetric, setSingleChartMetric] = useState('NewBiz_value');
   const [segmentationProperty, setSegmentationProperty] = useState('companyCountry');
-  const [multiMetrics, setMultiMetrics] = useState({ totalValue: true, totalDeals: true });
+  // This is now the single source of truth for the chart's "multi-metric" mode
+  const [multiChartMetrics, setMultiChartMetrics] = useState<string[]>(['NewBiz_value', 'SQL_deals']);
+
   const [kpiData, setKpiData] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,25 +37,53 @@ export default function HomePage() {
   const [countryOptions, setCountryOptions] = useState<string[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
 
-  // --- DERIVED STATE & HELPERS ---
-  // NEW: A memoized list of available metrics for dropdowns, e.g., ["NewBiz_deals", "NewBiz_value", "SQL_deals"]
+  // A memoized list of all available metrics based on the main selection, e.g., ["NewBiz_deals", "NewBiz_value"]
   const availableMetrics = useMemo(() => {
     return Object.entries(selectedMetrics).flatMap(([stage, types]) => 
       types.map(type => `${stage}_${type}`)
-    );
+    ).sort();
   }, [selectedMetrics]);
 
-  // --- DATA FETCHING (unchanged for this step) ---
-  useEffect(() => { /* ... */ setIsLoading(false); }, []);
-  useEffect(() => { /* ... */ }, []);
+  useEffect(() => {
+    const fetchDropdownOptions = async () => {
+      try {
+        const response = await fetch('/api/config-options');
+        const data = await response.json();
+        setStageOptions(data.outcomes || []);
+        setCountryOptions(data.countries || []);
+        setEmployeeOptions(data.employeeBuckets || []);
+      } catch (error) { console.error("Failed to fetch dropdown options:", error); }
+    };
+    fetchDropdownOptions();
+  }, []);
 
-  // --- EVENT HANDLERS ---
-  const handleMetricChange = (stageName: string, metricType: 'deals' | 'value') => { /* ... */ 
+  const currentConfig = { selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics };
+
+  useEffect(() => {
+    if (Object.keys(selectedMetrics).length === 0) { setIsLoading(false); return; };
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        const response = await fetch('/api/report', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(currentConfig),
+        });
+        const data = await response.json();
+        setKpiData(data.kpiData);
+        setChartData(data.chartData);
+      } catch (error) { console.error("Failed to fetch report data:", error); setKpiData(null); setChartData([]); }
+      setIsLoading(false);
+    };
+    fetchData();
+  }, [selectedMetrics, timePeriod, companyCountry, numberOfEmployees]);
+
+  const handleMetricChange = (stageName: string, metricType: 'deals' | 'value') => {
     setSelectedMetrics(prev => {
-      const newConfig = { ...prev };
+      const newConfig = JSON.parse(JSON.stringify(prev)); // Deep copy
       const stageMetrics = newConfig[stageName] || [];
       if (stageMetrics.includes(metricType)) {
-        newConfig[stageName] = stageMetrics.filter(m => m !== metricType);
+        newConfig[stageName] = stageMetrics.filter((m: string) => m !== metricType);
         if (newConfig[stageName].length === 0) { delete newConfig[stageName]; }
       } else {
         newConfig[stageName] = [...stageMetrics, metricType];
@@ -66,74 +91,35 @@ export default function HomePage() {
       return newConfig;
     });
   };
-  const handleMultiMetricChange = (event: React.ChangeEvent<HTMLInputElement>) => { /* ... */ 
-    const { name, checked } = event.target;
-    setMultiMetrics(prev => ({ ...prev, [name as keyof typeof prev]: checked, }));
+
+  const handleMultiChartMetricChange = (metric: string) => {
+    setMultiChartMetrics(prev => prev.includes(metric) ? prev.filter(m => m !== metric) : [...prev, metric]);
   };
 
-  // NEW: Handlers for adding, removing, and updating KPI cards
-  const addKpiCard = () => {
-    setKpiCardConfig(prev => [...prev, { id: Date.now(), metric: availableMetrics[0] || '' }]);
-  };
-  const removeKpiCard = (idToRemove: number) => {
-    setKpiCardConfig(prev => prev.filter(card => card.id !== idToRemove));
-  };
-  const updateKpiCardMetric = (idToUpdate: number, newMetric: string) => {
-    setKpiCardConfig(prev => prev.map(card => card.id === idToUpdate ? { ...card, metric: newMetric } : card));
-  };
-
-  const currentConfig = { selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, chartMetric, segmentationProperty, multiMetrics };
+  const addKpiCard = () => { setKpiCardConfig(prev => [...prev, { id: Date.now(), metric: availableMetrics[0] || '' }]); };
+  const removeKpiCard = (idToRemove: number) => { setKpiCardConfig(prev => prev.filter(card => card.id !== idToRemove)); };
+  const updateKpiCardMetric = (idToUpdate: number, newMetric: string) => { setKpiCardConfig(prev => prev.map(card => card.id === idToUpdate ? { ...card, metric: newMetric } : card)); };
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
+      {/* LEFT PANEL */}
       <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
-        {/* --- Configuration Panel (unchanged) --- */}
         <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
         <div className="space-y-6">
-            <div className="mb-6"><label className="block text-sm font-medium text-gray-400">Report Type</label><p className="text-lg font-semibold text-indigo-400">Custom Metric Report</p></div>
             <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Metrics</h3><div className="space-y-4 border-l-2 border-gray-700 pl-4">{stageOptions.map(stage => (<div key={stage}><p className="font-medium text-white">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={selectedMetrics[stage]?.includes('deals')} onChange={() => handleMetricChange(stage, 'deals')} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2"># Deals</span></label><label className="flex items-center"><input type="checkbox" checked={selectedMetrics[stage]?.includes('value')} onChange={() => handleMetricChange(stage, 'value')} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2">Value</span></label></div></div>))}</div></div>
-            <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Filters</h3><div className="space-y-4"><div><label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label><select id="timePeriod" name="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label><select id="companyCountry" name="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Countries</option>{countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div><div><label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label><select id="numberOfEmployees" name="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Sizes</option>{employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div></div></div>
+            <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Filters</h3><div className="space-y-4"><div><label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label><select id="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label><select id="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Countries</option>{countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div><div><label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label><select id="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Sizes</option>{employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div></div></div>
             <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Chart Settings</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={chartMode === 'single_segmented'} onChange={(e) => setChartMode(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={chartMode === 'multi_metric'} onChange={(e) => setChartMode(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>
-            {chartMode === 'single_segmented' && (<div className="mt-4 space-y-4"><div><label htmlFor="chartMetric" className="block text-sm font-medium text-gray-400">Metric</label><select id="chartMetric" name="chartMetric" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="totalValue">Total Value</option><option value="totalDeals">Total Deals</option></select></div><div><label htmlFor="segmentationProperty" className="block text-sm font-medium text-gray-400">Breakdown by</label><select id="segmentationProperty" name="segmentationProperty" value={segmentationProperty} onChange={(e) => setSegmentationProperty(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>)}
-            {chartMode === 'multi_metric' && (<div className="mt-4 space-y-2"><label className="flex items-center"><input type="checkbox" name="totalValue" checked={multiMetrics.totalValue} onChange={handleMultiMetricChange} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2">Total Value</span></label><label className="flex items-center"><input type="checkbox" name="totalDeals" checked={multiMetrics.totalDeals} onChange={handleMultiMetricChange} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2">Total Deals</span></label></div>)}
+            {chartMode === 'single_segmented' && (<div className="mt-4 space-y-4"><div><label htmlFor="chartMetric" className="block text-sm font-medium text-gray-400">Metric</label><select id="chartMetric" value={singleChartMetric} onChange={(e) => setSingleChartMetric(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label htmlFor="segmentationProperty" className="block text-sm font-medium text-gray-400">Breakdown by</label><select id="segmentationProperty" value={segmentationProperty} onChange={(e) => setSegmentationProperty(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>)}
+            {chartMode === 'multi_metric' && (<div className="mt-4 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" name={metric} checked={multiChartMetrics.includes(metric)} onChange={() => handleMultiChartMetricChange(metric)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}
             </div>
         </div>
       </div>
+      {/* RIGHT PANEL */}
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
-        {/* --- NEW: Dynamic KPI Card Section --- */}
-        <div className="mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {kpiCardConfig.map(card => (
-                    <div key={card.id} className="bg-gray-800/50 p-2 rounded-lg border border-gray-700">
-                        <div className="flex justify-end mb-1">
-                            <button onClick={() => removeKpiCard(card.id)} className="text-gray-500 hover:text-red-400 text-xs">✖</button>
-                        </div>
-                        <select 
-                            value={card.metric}
-                            onChange={(e) => updateKpiCardMetric(card.id, e.target.value)}
-                            className="mb-2 block w-full text-xs bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md"
-                        >
-                            {availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}
-                        </select>
-                        {/* The value is temporarily the name of the metric itself for display */}
-                        <KpiCard title={card.metric.replace(/_/g, ' ')} value={"-"} />
-                    </div>
-                ))}
-            </div>
-            <button onClick={addKpiCard} className="mt-4 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">
-                + Add KPI Card
-            </button>
-        </div>
-        
-        <div className="space-y-8">
-            <Chart data={chartData} mode={chartMode} config={currentConfig} />
-            <Table data={chartData} mode={chartMode} />
-        </div>
-        <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
-          <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
-          <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">{JSON.stringify(currentConfig, null, 2)}</pre>
-        </div>
+        <div className="mb-8"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{kpiCardConfig.map(card => (<div key={card.id} className="bg-gray-800/50 p-2 rounded-lg border border-gray-700"><div className="flex justify-end mb-1"><button onClick={() => removeKpiCard(card.id)} className="text-gray-500 hover:text-red-400 text-xs">✖</button></div><select value={card.metric} onChange={(e) => updateKpiCardMetric(card.id, e.target.value)} className="mb-2 block w-full text-xs bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md">{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select><KpiCard title={card.metric.replace(/_/g, ' ')} value={kpiData ? kpiData[card.metric] : "-"} /></div>))}</div><button onClick={addKpiCard} className="mt-4 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">+ Add KPI Card</button></div>
+        <div className="space-y-8"><Chart data={chartData} mode={chartMode} config={currentConfig} /><Table data={chartData} mode={chartMode} /></div>
+        <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg"><h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3><pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">{JSON.stringify(currentConfig, null, 2)}</pre></div>
       </div>
     </main>
   );

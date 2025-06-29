@@ -2,33 +2,40 @@
 import { NextResponse } from 'next/server';
 import { BigQuery } from '@google-cloud/bigquery';
 
-// Helper objects to map user-friendly names to actual SQL code
-const metricSqlMapping: Record<string, string> = {
-  totalValue: 'ROUND(SUM(s.value), 2)',
-  totalDeals: 'COUNT(DISTINCT s.dd_stage_id)',
-  influencedValue: 'ROUND(SUM(s.value), 2)', // Using total value as per your logic
-};
-
-const segmentationSqlMapping: Record<string, string> = {
-  companyCountry: 'c.properties.country',
-  numberOfEmployees: 'c.properties.number_of_employees',
-};
-
 export async function POST(request: Request) {
   const config = await request.json();
+  const { selectedMetrics } = config;
+
+  // Exit early if no metrics are selected
+  if (!selectedMetrics || Object.keys(selectedMetrics).length === 0) {
+    return NextResponse.json({ kpiData: {}, chartData: [] });
+  }
 
   try {
     const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON || '{}');
     const projectId = process.env.GCP_PROJECT_ID;
+    const bigquery = new BigQuery({ projectId, credentials });
 
-    const bigquery = new BigQuery({
-      projectId: projectId,
-      credentials: credentials,
-    });
+    // --- DYNAMIC SQL GENERATION ---
 
-    const queryParams: any = { outcome: config.outcome };
+    // 1. Build a list of all metrics to calculate, e.g., "NewBiz_value", "SQL_deals"
+    const metricsToCalculate = Object.entries(config.selectedMetrics).flatMap(([stage, types]) =>
+      (types as string[]).map(type => `${stage}_${type}`)
+    );
 
-    // --- Dynamic Filter Generation (remains the same) ---
+    // 2. Create the conditional aggregation part of the SELECT clause
+    // This creates a SUM or COUNT for each requested metric
+    const selections = metricsToCalculate.map(metric => {
+      const [stageName, metricType] = metric.split('_');
+      if (metricType === 'value') {
+        return `ROUND(SUM(IF(s.stage_name = '${stageName}', s.value, 0)), 2) AS ${metric}`;
+      } else { // 'deals'
+        return `COUNT(DISTINCT IF(s.stage_name = '${stageName}', s.dd_stage_id, NULL)) AS ${metric}`;
+      }
+    }).join(',\n        ');
+
+    // 3. Generate filter clauses (same as before)
+    const queryParams: any = {};
     let timeFilter = '';
     switch (config.timePeriod) {
         case 'last_month': timeFilter = `AND s.timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)) AND s.timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`; break;
@@ -46,61 +53,26 @@ export async function POST(request: Request) {
       queryParams.numberOfEmployees = config.numberOfEmployees;
     }
     
-    const fromClause = `FROM \`${projectId}.dreamdata_demo.stages\` AS s LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id`;
-    const whereClause = `WHERE s.stage_name = @outcome ${timeFilter} ${countryFilter} ${employeeFilter}`;
+    const fromAndJoins = `FROM \`${projectId}.dreamdata_demo.stages\` AS s LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id`;
+    const whereClause = `WHERE 1=1 ${timeFilter} ${countryFilter} ${employeeFilter}`;
 
-    // --- Query 1: For KPI Cards (remains the same) ---
-    const kpiQuery = `SELECT ROUND(SUM(s.value), 2) AS totalValue, COUNT(DISTINCT s.dd_stage_id) as totalDeals, ROUND(SUM(s.value), 2) AS influencedValue ${fromClause} ${whereClause}`;
+    // 4. Build the two queries (KPI and Chart) using these dynamic parts
+    const kpiQuery = `SELECT ${selections} ${fromAndJoins} ${whereClause}`;
+    const timeSeriesQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) as month, ${selections} ${fromAndJoins} ${whereClause} GROUP BY month ORDER BY month ASC`;
 
-    // --- NEW: Query 2: Dynamic Chart Query Builder ---
-    let timeSeriesQuery = '';
-    if (config.chartMode === 'single_segmented') {
-        const metricSql = metricSqlMapping[config.chartMetric] || metricSqlMapping.totalValue;
-        const segmentSql = segmentationSqlMapping[config.segmentationProperty] || segmentationSqlMapping.companyCountry;
-        
-        timeSeriesQuery = `
-            SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${segmentSql} as segment, ${metricSql} AS value
-            ${fromClause} ${whereClause}
-            GROUP BY month, segment ORDER BY month ASC, segment ASC
-        `;
-    } else { // 'multi_metric' mode
-        let selectedMetricsSql = Object.entries(config.multiMetrics)
-            .filter(([, isSelected]) => isSelected)
-            .map(([metricName]) => `${metricSqlMapping[metricName]} AS ${metricName}`)
-            .join(', ');
-
-        if (!selectedMetricsSql) { // If no metrics selected, select one by default
-            selectedMetricsSql = `${metricSqlMapping.totalValue} AS totalValue`;
-        }
-
-        timeSeriesQuery = `
-            SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${selectedMetricsSql}
-            ${fromClause} ${whereClause}
-            GROUP BY month ORDER BY month ASC
-        `;
-    }
-    
-    // --- Run Queries ---
     const kpiOptions = { query: kpiQuery, location: 'EU', params: queryParams };
     const timeSeriesOptions = { query: timeSeriesQuery, location: 'EU', params: queryParams };
 
-    console.log("--- Executing Time Series Query ---", timeSeriesOptions.query, timeSeriesOptions.params);
+    console.log("--- Executing KPI Query ---", kpiOptions.query);
     const [[kpiRows], [timeSeriesRows]] = await Promise.all([
         bigquery.query(kpiOptions),
         bigquery.query(timeSeriesOptions)
     ]);
-    console.log("--- Time Series Result ---", timeSeriesRows);
     
-    const kpiData = { /* ... kpi data processing remains the same ... */ 
-        totalValue: parseFloat(kpiRows[0]?.totalValue || 0),
-        totalDeals: parseInt(kpiRows[0]?.totalDeals || '0', 10),
-        influencedValue: parseFloat(kpiRows[0]?.influencedValue || 0)
-    };
-    
-    // The chart data now has a different structure, we pass it on directly
+    const kpiData = kpiRows[0] || {};
     const chartData = timeSeriesRows.map(row => ({
         ...row,
-        month: row.month ? new Date(row.month.value).toISOString() : null, // Standardize date format
+        month: row.month ? new Date(row.month.value).toISOString() : null,
     }));
 
     return NextResponse.json({ kpiData, chartData });
