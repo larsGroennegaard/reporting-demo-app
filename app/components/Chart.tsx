@@ -5,19 +5,20 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#0088FE", "#00C49F", "#FFBB28"];
 
-// NEW: Helper function to format large numbers on the Y-Axis
-const formatYAxisTick = (tick: number) => {
+// UPDATED: Adjusted the function to match what Recharts expects
+const formatYAxisTick = (tick: any) => {
+  if (typeof tick !== 'number') return tick; // Safety check
+
   if (tick >= 1000000) {
     return `${(tick / 1000000).toFixed(1)}M`;
   }
   if (tick >= 1000) {
     return `${(tick / 1000).toFixed(0)}K`;
   }
-  return tick;
+  return String(tick); // Ensure we always return a string
 };
 
 const processChartData = (data: any[], mode: string, config: any) => {
-  // ... (this function remains the same)
   if (!data || data.length === 0) return { chartData: [], keys: [] };
 
   if (mode === 'single_segmented') {
@@ -53,12 +54,14 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
         <LineChart data={chartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
           <XAxis dataKey="month" stroke="#A0AEC0" />
-          {/* UPDATED: Added the tickFormatter to the YAxis */}
           <YAxis stroke="#A0AEC0" tickFormatter={formatYAxisTick} />
           <Tooltip 
             contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} 
             labelStyle={{ color: '#E2E8F0' }}
-            formatter={(value: number) => formatYAxisTick(value)}
+            formatter={(value: any) => {
+                if (typeof value === 'number') return formatYAxisTick(value);
+                return value;
+            }}
           />
           <Legend wrapperStyle={{ color: '#E2E8F0' }}/>
           {keys.map((key, index) => (

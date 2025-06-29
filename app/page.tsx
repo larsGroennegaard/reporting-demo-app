@@ -4,7 +4,7 @@
 import { useState, useEffect } from 'react';
 import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
-import Table from './components/Table'; // Import the new Table component
+import Table from './components/Table';
 
 export default function HomePage() {
   const [outcome, setOutcome] = useState('');
@@ -104,8 +104,8 @@ export default function HomePage() {
         <div className="space-y-8">
             <Chart data={chartData} mode={chartMode} config={currentConfig} />
             
-            {/* NEW: Table component is now displayed */}
-            <Table data={chartData} />
+            {/* THE FIX IS HERE: We now pass the chartMode prop to the Table component */}
+            <Table data={chartData} mode={chartMode} />
         </div>
 
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
