@@ -3,10 +3,8 @@
 
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
-// A predefined list of colors for the chart lines
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#0088FE", "#00C49F", "#FFBB28"];
 
-// Helper function to re-format the data for a multi-line chart
 const processChartData = (data: any[], mode: string, config: any) => {
   if (!data || data.length === 0) return { chartData: [], keys: [] };
 
@@ -15,12 +13,16 @@ const processChartData = (data: any[], mode: string, config: any) => {
     const segments = new Set<string>();
 
     data.forEach(item => {
-      const month = new Date(item.month.value).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      // THE FIX IS HERE: Changed item.month.value to just item.month
+      const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+      
       if (!pivotedData[month]) {
         pivotedData[month] = { month };
       }
-      pivotedData[month][item.segment] = item.value;
-      segments.add(item.segment);
+      // Ensure segment is not null before adding
+      const segmentName = item.segment || 'Unknown';
+      pivotedData[month][segmentName] = item.value;
+      segments.add(segmentName);
     });
 
     return {
@@ -58,15 +60,15 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
           />
           <Legend wrapperStyle={{ color: '#E2E8F0' }}/>
 
-          {/* Dynamically create a line for each key (segment or metric) */}
           {keys.map((key, index) => (
             <Line
               key={key}
               type="monotone"
               dataKey={key}
-              name={key} // The name that appears in the legend
-              stroke={COLORS[index % COLORS.length]} // Cycle through our predefined colors
+              name={key}
+              stroke={COLORS[index % COLORS.length]}
               activeDot={{ r: 8 }}
+              connectNulls // This will connect lines across any missing data points
             />
           ))}
         </LineChart>
