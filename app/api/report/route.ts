@@ -14,13 +14,10 @@ export async function POST(request: Request) {
       credentials: credentials,
     });
 
-    // 1. Define base parameters
-    const queryParams: { outcome: string; country?: string; numberOfEmployees?: string; } = {
-      outcome: config.outcome,
-    };
+    const queryParams: any = { outcome: config.outcome };
 
-    // 2. Create time filter
     let timeFilter = '';
+    // ... (time filter logic remains the same)
     switch (config.timePeriod) {
       case 'last_month':
         timeFilter = `AND s.timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)) AND s.timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
@@ -33,65 +30,74 @@ export async function POST(request: Request) {
         break;
     }
 
-    // 3. Create country filter
     let countryFilter = '';
     if (config.companyCountry && config.companyCountry !== 'all') {
       countryFilter = `AND c.properties.country = @country`;
       queryParams.country = config.companyCountry;
     }
 
-    // 4. NEW: Create employee size filter
     let employeeFilter = '';
     if (config.numberOfEmployees && config.numberOfEmployees !== 'all') {
       employeeFilter = `AND c.properties.number_of_employees = @numberOfEmployees`;
       queryParams.numberOfEmployees = config.numberOfEmployees;
     }
 
-    // 5. Build the main SQL query
-    const sqlQuery = `
+    // --- QUERY 1: For KPI Cards (Aggregate Data) ---
+    const kpiQuery = `
       SELECT
         ROUND(SUM(s.value), 2) AS totalValue,
         COUNT(DISTINCT s.dd_stage_id) as totalDeals,
         ROUND(SUM(s.value), 2) AS influencedValue
-      FROM
-        \`${projectId}.dreamdata_demo.stages\` AS s
-        LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id
-      WHERE
-        s.stage_name = @outcome
-        ${timeFilter}
-        ${countryFilter}
-        ${employeeFilter}
-    `;
+      FROM \`${projectId}.dreamdata_demo.stages\` AS s
+      LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id
+      WHERE s.stage_name = @outcome ${timeFilter} ${countryFilter} ${employeeFilter}`;
 
-    const options = {
-      query: sqlQuery,
-      location: 'EU', 
-      params: queryParams,
+    // --- QUERY 2: For Chart (Time-Series Data) ---
+    const timeSeriesQuery = `
+      SELECT
+        DATE_TRUNC(s.timestamp, MONTH) AS month,
+        ROUND(SUM(s.value), 2) AS value
+      FROM \`${projectId}.dreamdata_demo.stages\` AS s
+      LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id
+      WHERE s.stage_name = @outcome ${timeFilter} ${countryFilter} ${employeeFilter}
+      GROUP BY month ORDER BY month ASC`;
+
+    const kpiOptions = { query: kpiQuery, location: 'EU', params: queryParams };
+    const timeSeriesOptions = { query: timeSeriesQuery, location: 'EU', params: queryParams };
+
+    console.log("--- Executing KPI Query ---", kpiOptions.query, kpiOptions.params);
+    console.log("--- Executing Time Series Query ---", timeSeriesOptions.query, timeSeriesOptions.params);
+    
+    // Run both queries in parallel
+    const [kpiResult, timeSeriesResult] = await Promise.all([
+        bigquery.query(kpiOptions),
+        bigquery.query(timeSeriesOptions)
+    ]);
+    
+    const [kpiRows] = kpiResult;
+    const [timeSeriesRows] = timeSeriesResult;
+
+    console.log("--- KPI Result ---", kpiRows);
+    console.log("--- Time Series Result ---", timeSeriesRows);
+
+    const kpiData = {
+        totalValue: parseFloat(kpiRows[0]?.totalValue || 0),
+        totalDeals: parseInt(kpiRows[0]?.totalDeals || '0', 10),
+        influencedValue: parseFloat(kpiRows[0]?.influencedValue || 0)
     };
-    
-    console.log("--- Executing BigQuery Query ---");
-    console.log("SQL:", options.query);
-    console.log("Params:", options.params);
-    
-    const [rows] = await bigquery.query(options);
 
-    console.log("--- Raw Result from BigQuery ---");
-    console.log(rows);
+    // Format the time-series data for the chart
+    const chartData = timeSeriesRows.map(row => ({
+        // Format the month for display, e.g., "Jan 2025"
+        month: new Date(row.month.value).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }),
+        value: parseFloat(row.value)
+    }));
 
-    const result = rows[0] || {};
-    const numericResult = {
-        totalValue: parseFloat(result.totalValue || 0),
-        totalDeals: parseInt(result.totalDeals || '0', 10),
-        influencedValue: parseFloat(result.influencedValue || 0)
-    };
-    
-    return NextResponse.json(numericResult);
+    // Return both sets of data
+    return NextResponse.json({ kpiData, chartData });
 
   } catch (error) {
     console.error("BigQuery query failed:", error);
-    return new NextResponse(JSON.stringify({ error: 'Failed to query database' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new NextResponse(JSON.stringify({ error: 'Failed to query database' }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 }

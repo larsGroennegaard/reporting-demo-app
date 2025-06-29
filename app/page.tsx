@@ -3,18 +3,23 @@
 
 import { useState, useEffect } from 'react';
 import KpiCard from './components/KpiCard';
-import Chart from './components/Chart'; // Import the new Chart component
+import Chart from './components/Chart';
 
 export default function HomePage() {
   // --- STATE MANAGEMENT ---
   const [outcome, setOutcome] = useState('');
-  const [timePeriod, setTimePeriod] =useState('this_year');
+  const [timePeriod, setTimePeriod] = useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
   const [numberOfEmployees, setNumberOfEmployees] = useState('all');
+  // NEW: State for the selected chart metric
+  const [chartMetric, setChartMetric] = useState('totalValue');
 
-  const [reportData, setReportData] = useState<any>(null);
+  // State for data
+  const [kpiData, setKpiData] = useState<any>(null);
+  const [chartData, setChartData] = useState<any[]>([]); // NEW: State for chart data
   const [isLoading, setIsLoading] = useState(true);
 
+  // State for dropdown options
   const [outcomeOptions, setOutcomeOptions] = useState<string[]>([]);
   const [countryOptions, setCountryOptions] = useState<string[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
@@ -22,6 +27,7 @@ export default function HomePage() {
   // --- DATA FETCHING ---
   useEffect(() => {
     const fetchDropdownOptions = async () => {
+      // ... (this useEffect remains the same)
       try {
         const response = await fetch('/api/config-options');
         const data = await response.json();
@@ -46,61 +52,58 @@ export default function HomePage() {
         const response = await fetch('/api/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outcome, timePeriod, companyCountry, numberOfEmployees }),
+          body: JSON.stringify({ outcome, timePeriod, companyCountry, numberOfEmployees, chartMetric }), // NEW: send chartMetric
         });
         const data = await response.json();
-        setReportData(data);
+        // UPDATED: Handle the new response shape
+        setKpiData(data.kpiData);
+        setChartData(data.chartData);
       } catch (error) {
         console.error("Failed to fetch report data:", error);
-        setReportData(null);
+        setKpiData(null);
+        setChartData([]);
       }
       setIsLoading(false);
     };
     fetchData();
-  }, [outcome, timePeriod, companyCountry, numberOfEmployees]);
+  }, [outcome, timePeriod, companyCountry, numberOfEmployees, chartMetric]); // NEW: re-run on chartMetric change
 
-  const currentConfig = { outcome, timePeriod, companyCountry, numberOfEmployees };
+  const currentConfig = { outcome, timePeriod, companyCountry, numberOfEmployees, chartMetric };
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
       <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
         <div className="mb-6">
-          <label htmlFor="reportType" className="block text-sm font-medium text-gray-400">Report Type</label>
-          <p id="reportType" className="text-lg font-semibold text-indigo-400">Outcome Analysis</p>
+          <label className="block text-sm font-medium text-gray-400">Report Type</label>
+          <p className="text-lg font-semibold text-indigo-400">Outcome Analysis</p>
         </div>
         <div className="space-y-6">
-          <div>
+            {/* ... (Outcome and Filters sections remain the same) ... */}
+            <div>
             <label htmlFor="outcome" className="block text-sm font-medium text-gray-400">Outcome</label>
             <select id="outcome" name="outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
               {outcomeOptions.map(option => (<option key={option} value={option}>{option}</option>))}
             </select>
-          </div>
+            </div>
+            <div>
+                <h3 className="text-lg font-semibold mb-2 text-gray-100">Filters</h3>
+                <div className="space-y-4">
+                    {/* ... (Time Period, Country, Employees dropdowns remain the same) ... */}
+                    <div><label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label><select id="timePeriod" name="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div>
+                    <div><label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label><select id="companyCountry" name="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Countries</option>{countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
+                    <div><label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label><select id="numberOfEmployees" name="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Sizes</option>{employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div>
+                </div>
+            </div>
+          {/* NEW: Chart Configuration Section */}
           <div>
-            <h3 className="text-lg font-semibold mb-2 text-gray-100">Filters</h3>
-            <div className="space-y-4">
-              <div>
-                <label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label>
-                <select id="timePeriod" name="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                  <option value="this_year">This Year</option>
-                  <option value="last_quarter">Last Quarter</option>
-                  <option value="last_month">Last Month</option>
-                </select>
-              </div>
-              <div>
-                <label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label>
-                <select id="companyCountry" name="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                  <option value="all">All Countries</option>
-                  {countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}
-                </select>
-              </div>
-              <div>
-                <label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label>
-                <select id="numberOfEmployees" name="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
-                  <option value="all">All Sizes</option>
-                  {employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}
-                </select>
-              </div>
+            <h3 className="text-lg font-semibold mb-2 text-gray-100">Chart Settings</h3>
+            <div>
+              <label htmlFor="chartMetric" className="block text-sm font-medium text-gray-400">Metric</label>
+              <select id="chartMetric" name="chartMetric" value={chartMetric} onChange={(e) => setChartMetric(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                <option value="totalValue">Total Value</option>
+                {/* We will add more metrics later */}
+              </select>
             </div>
           </div>
         </div>
@@ -108,19 +111,17 @@ export default function HomePage() {
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {isLoading ? (<p className="col-span-3">Loading data...</p>) : reportData ? (<>
-              <KpiCard title="Total Value" value={reportData.totalValue} />
-              <KpiCard title="Influenced Value" value={reportData.influencedValue} />
-              <KpiCard title="Total Deals" value={reportData.totalDeals} />
+          {isLoading ? (<p className="col-span-3">Loading data...</p>) : kpiData ? (<>
+              <KpiCard title="Total Value" value={kpiData.totalValue} />
+              <KpiCard title="Influenced Value" value={kpiData.influencedValue} />
+              <KpiCard title="Total Deals" value={kpiData.totalDeals} />
             </>) : (<p className="col-span-3">No data available.</p>
           )}
         </div>
-        
-        {/* NEW: Chart component is now displayed */}
         <div className="mt-8">
-            <Chart />
+            {/* UPDATED: Pass the dynamic chartData to the Chart component */}
+            <Chart data={chartData} />
         </div>
-
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
           <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
