@@ -8,13 +8,17 @@ const processTableData = (data: any[], mode: string, config: any) => {
   if (mode === 'segmentation') {
     const metrics = config.multiChartMetrics || [];
     const pivoted: { [key: string]: any } = {};
-    metrics.forEach(metric => {
+    
+    // FIX: Added (metric: string) type annotation
+    metrics.forEach((metric: string) => {
         pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') };
     });
 
-    data.forEach(item => {
+    // FIX: Added (item: any) type annotation
+    data.forEach((item: any) => {
         const segment = item.segment || 'Unknown';
-        metrics.forEach(metric => {
+        // FIX: Added (metric: string) type annotation
+        metrics.forEach((metric: string) => {
             if (pivoted[metric]) {
                 pivoted[metric][segment] = item[metric] || 0;
             }
@@ -32,7 +36,8 @@ const processTableData = (data: any[], mode: string, config: any) => {
   const timeUnits = new Set<string>();
 
   if (config.chartMode === 'single_segmented') {
-    data.forEach(item => {
+    // FIX: Added (item: any) type annotation
+    data.forEach((item: any) => {
       const segment = item.segment || 'Unknown';
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       timeUnits.add(month);
@@ -41,13 +46,17 @@ const processTableData = (data: any[], mode: string, config: any) => {
     });
     const tableHeaders = ['Segment', ...Array.from(timeUnits)];
     return { tableHeaders, tableRows: Object.values(pivoted) };
+
   } else { // multi_metric
     const metrics = config.multiChartMetrics || [];
-    metrics.forEach(metric => { pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') }; });
-    data.forEach(item => {
+    // FIX: Added (metric: string) type annotation
+    metrics.forEach((metric: string) => { pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') }; });
+    // FIX: Added (item: any) type annotation
+    data.forEach((item: any) => {
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       timeUnits.add(month);
-      metrics.forEach(metric => {
+      // FIX: Added (metric: string) type annotation
+      metrics.forEach((metric: string) => {
         if (pivoted[metric]) { pivoted[metric][month] = item[metric] || 0; }
       });
     });
@@ -57,10 +66,9 @@ const processTableData = (data: any[], mode: string, config: any) => {
 };
 
 export default function Table({ data, mode, config }: { data: any[], mode: string, config: any }) {
-  // Pass config to the processor
   const { tableHeaders, tableRows } = processTableData(data, mode, config);
 
-  if (tableRows.length === 0) { /* ... remains the same ... */ 
+  if (tableRows.length === 0) {
     return (
         <div className="bg-gray-800 p-6 shadow rounded-lg">
             <h3 className="text-lg font-semibold text-gray-100">Data Table</h3>
