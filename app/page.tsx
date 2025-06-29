@@ -54,28 +54,10 @@ export default function HomePage() {
     fetchDropdownOptions();
   }, []);
 
-  // Combine all config into one object for the API call and debug view
-  const currentConfig = { 
-    selectedMetrics, 
-    kpiCardConfig, 
-    timePeriod, 
-    companyCountry, 
-    numberOfEmployees, 
-    chartMode, 
-    singleChartMetric, 
-    segmentationProperty, 
-    multiChartMetrics 
-  };
-  
-  // This useEffect hook fetches all report data
-  useEffect(() => {
-    if (Object.keys(selectedMetrics).length === 0) { 
-        setIsLoading(false); 
-        setKpiData({});
-        setChartData([]);
-        return; 
-    };
+  const currentConfig = { selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics };
 
+  useEffect(() => {
+    if (Object.keys(selectedMetrics).length === 0) { setIsLoading(false); setKpiData({}); setChartData([]); return; };
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -87,15 +69,10 @@ export default function HomePage() {
         const data = await response.json();
         setKpiData(data.kpiData);
         setChartData(data.chartData);
-      } catch (error) { 
-        console.error("Failed to fetch report data:", error); 
-        setKpiData(null); 
-        setChartData([]); 
-      }
+      } catch (error) { console.error("Failed to fetch report data:", error); setKpiData(null); setChartData([]); }
       setIsLoading(false);
     };
     fetchData();
-  // THE FIX IS HERE: The dependency array now includes all chart configuration states
   }, [selectedMetrics, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics]);
 
   const handleMetricChange = (stageName: string, metricType: 'deals' | 'value') => {
@@ -129,7 +106,22 @@ export default function HomePage() {
             <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Filters</h3><div className="space-y-4"><div><label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label><select id="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label><select id="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Countries</option>{countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div><div><label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label><select id="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="all">All Sizes</option>{employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}</select></div></div></div>
             <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Chart Settings</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={chartMode === 'single_segmented'} onChange={(e) => setChartMode(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={chartMode === 'multi_metric'} onChange={(e) => setChartMode(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>
             {chartMode === 'single_segmented' && (<div className="mt-4 space-y-4"><div><label htmlFor="chartMetric" className="block text-sm font-medium text-gray-400">Metric</label><select id="chartMetric" value={singleChartMetric} onChange={(e) => setSingleChartMetric(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label htmlFor="segmentationProperty" className="block text-sm font-medium text-gray-400">Breakdown by</label><select id="segmentationProperty" value={segmentationProperty} onChange={(e) => setSegmentationProperty(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>)}
-            {chartMode === 'multi_metric' && (<div className="mt-4 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" name={metric} checked={multiChartMetrics.includes(metric)} onChange={() => handleMultiChartMetricChange(metric)} className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}
+            
+            {/* THE FIX IS HERE: This block is now correctly generated dynamically */}
+            {chartMode === 'multi_metric' && (<div className="mt-4 space-y-2">
+              {availableMetrics.map(metric => (
+                <label key={metric} className="flex items-center">
+                  <input
+                    type="checkbox"
+                    name={metric}
+                    checked={multiChartMetrics.includes(metric)}
+                    onChange={() => handleMultiChartMetricChange(metric)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                  />
+                  <span className="ml-2">{metric.replace(/_/g, ' ')}</span>
+                </label>
+              ))}
+            </div>)}
             </div>
         </div>
       </div>
