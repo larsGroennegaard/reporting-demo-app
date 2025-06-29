@@ -14,10 +14,12 @@ export async function POST(request: Request) {
       credentials: credentials,
     });
 
-    const queryParams: { outcome: string; country?: string } = {
+    // 1. Define base parameters
+    const queryParams: { outcome: string; country?: string; numberOfEmployees?: string; } = {
       outcome: config.outcome,
     };
 
+    // 2. Create time filter
     let timeFilter = '';
     switch (config.timePeriod) {
       case 'last_month':
@@ -31,12 +33,21 @@ export async function POST(request: Request) {
         break;
     }
 
+    // 3. Create country filter
     let countryFilter = '';
     if (config.companyCountry && config.companyCountry !== 'all') {
       countryFilter = `AND c.properties.country = @country`;
       queryParams.country = config.companyCountry;
     }
 
+    // 4. NEW: Create employee size filter
+    let employeeFilter = '';
+    if (config.numberOfEmployees && config.numberOfEmployees !== 'all') {
+      employeeFilter = `AND c.properties.number_of_employees = @numberOfEmployees`;
+      queryParams.numberOfEmployees = config.numberOfEmployees;
+    }
+
+    // 5. Build the main SQL query
     const sqlQuery = `
       SELECT
         ROUND(SUM(s.value), 2) AS totalValue,
@@ -49,11 +60,12 @@ export async function POST(request: Request) {
         s.stage_name = @outcome
         ${timeFilter}
         ${countryFilter}
+        ${employeeFilter}
     `;
 
     const options = {
       query: sqlQuery,
-      location: 'EU',
+      location: 'EU', 
       params: queryParams,
     };
     
@@ -67,8 +79,6 @@ export async function POST(request: Request) {
     console.log(rows);
 
     const result = rows[0] || {};
-    // Parse the data into numbers and return them directly.
-    // The frontend KpiCard component will handle the currency formatting.
     const numericResult = {
         totalValue: parseFloat(result.totalValue || 0),
         totalDeals: parseInt(result.totalDeals || '0', 10),

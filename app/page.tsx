@@ -6,22 +6,19 @@ import KpiCard from './components/KpiCard';
 
 export default function HomePage() {
   // --- STATE MANAGEMENT ---
-  // State for the selected configuration
-  const [outcome, setOutcome] = useState('NewBiz');
+  const [outcome, setOutcome] = useState('');
   const [timePeriod, setTimePeriod] = useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
-  
-  // State for the data returned by the main report API
+  const [numberOfEmployees, setNumberOfEmployees] = useState('all'); // NEW state for employee filter
+
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // -- NEW: State to hold the dynamic dropdown options --
   const [outcomeOptions, setOutcomeOptions] = useState<string[]>([]);
   const [countryOptions, setCountryOptions] = useState<string[]>([]);
+  const [employeeOptions, setEmployeeOptions] = useState<string[]>([]); // NEW state for employee options
 
   // --- DATA FETCHING ---
-
-  // NEW: This useEffect hook fetches the options for the dropdowns once, when the page loads.
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
@@ -29,7 +26,7 @@ export default function HomePage() {
         const data = await response.json();
         setOutcomeOptions(data.outcomes || []);
         setCountryOptions(data.countries || []);
-        // Set a default outcome if the list has values
+        setEmployeeOptions(data.employeeBuckets || []); // NEW: set employee options
         if (data.outcomes && data.outcomes.length > 0) {
             setOutcome(data.outcomes[0]);
         }
@@ -38,11 +35,9 @@ export default function HomePage() {
       }
     };
     fetchDropdownOptions();
-  }, []); // The empty array [] means this effect runs only once when the component mounts.
+  }, []);
 
-  // This useEffect hook fetches the main report data whenever a config value changes.
   useEffect(() => {
-    // Don't fetch if we don't have any outcome options yet
     if (!outcome) return;
 
     const fetchData = async () => {
@@ -51,7 +46,7 @@ export default function HomePage() {
         const response = await fetch('/api/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outcome, timePeriod, companyCountry }),
+          body: JSON.stringify({ outcome, timePeriod, companyCountry, numberOfEmployees }), // NEW: send employee filter
         });
         const data = await response.json();
         setReportData(data);
@@ -63,14 +58,12 @@ export default function HomePage() {
     };
 
     fetchData();
-  }, [outcome, timePeriod, companyCountry]);
+  }, [outcome, timePeriod, companyCountry, numberOfEmployees]); // NEW: re-run on employee filter change
 
-  const currentConfig = { outcome, timePeriod, companyCountry };
+  const currentConfig = { outcome, timePeriod, companyCountry, numberOfEmployees }; // NEW: add to debug view
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
-      
-      {/* Left Configuration Pane */}
       <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
         <div className="mb-6">
@@ -80,17 +73,8 @@ export default function HomePage() {
         <div className="space-y-6">
           <div>
             <label htmlFor="outcome" className="block text-sm font-medium text-gray-400">Outcome</label>
-            {/* UPDATED: This select now maps over the dynamic outcomeOptions state */}
-            <select
-              id="outcome"
-              name="outcome"
-              value={outcome}
-              onChange={(e) => setOutcome(e.target.value)}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-            >
-              {outcomeOptions.map(option => (
-                <option key={option} value={option}>{option}</option>
-              ))}
+            <select id="outcome" name="outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+              {outcomeOptions.map(option => (<option key={option} value={option}>{option}</option>))}
             </select>
           </div>
           <div>
@@ -98,13 +82,7 @@ export default function HomePage() {
             <div className="space-y-4">
               <div>
                 <label htmlFor="timePeriod" className="block text-sm font-medium text-gray-400">Time Period</label>
-                <select
-                  id="timePeriod"
-                  name="timePeriod"
-                  value={timePeriod}
-                  onChange={(e) => setTimePeriod(e.target.value)}
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                >
+                <select id="timePeriod" name="timePeriod" value={timePeriod} onChange={(e) => setTimePeriod(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                   <option value="this_year">This Year</option>
                   <option value="last_quarter">Last Quarter</option>
                   <option value="last_month">Last Month</option>
@@ -112,42 +90,33 @@ export default function HomePage() {
               </div>
               <div>
                 <label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label>
-                 {/* UPDATED: This select now maps over the dynamic countryOptions state */}
-                <select
-                  id="companyCountry"
-                  name="companyCountry"
-                  value={companyCountry}
-                  onChange={(e) => setCompanyCountry(e.target.value)}
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
-                >
+                <select id="companyCountry" name="companyCountry" value={companyCountry} onChange={(e) => setCompanyCountry(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
                   <option value="all">All Countries</option>
-                  {countryOptions.map(option => (
-                    <option key={option} value={option}>{option}</option>
-                  ))}
+                  {countryOptions.map(option => (<option key={option} value={option}>{option}</option>))}
+                </select>
+              </div>
+              {/* NEW: Number of Employees Dropdown */}
+              <div>
+                <label htmlFor="numberOfEmployees" className="block text-sm font-medium text-gray-400">Number of Employees</label>
+                <select id="numberOfEmployees" name="numberOfEmployees" value={numberOfEmployees} onChange={(e) => setNumberOfEmployees(e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                  <option value="all">All Sizes</option>
+                  {employeeOptions.map(option => (<option key={option} value={option}>{option}</option>))}
                 </select>
               </div>
             </div>
           </div>
         </div>
       </div>
-
-      {/* Right Report Canvas */}
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {isLoading ? (
-            <p className="col-span-3">Loading data...</p>
-          ) : reportData ? (
-            <>
+          {isLoading ? (<p className="col-span-3">Loading data...</p>) : reportData ? (<>
               <KpiCard title="Total Value" value={reportData.totalValue} />
               <KpiCard title="Influenced Value" value={reportData.influencedValue} />
               <KpiCard title="Total Deals" value={reportData.totalDeals} />
-            </>
-          ) : (
-            <p className="col-span-3">No data available.</p>
+            </>) : (<p className="col-span-3">No data available.</p>
           )}
         </div>
-        
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
           <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">

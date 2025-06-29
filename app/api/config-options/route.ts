@@ -2,12 +2,9 @@
 import { NextResponse } from 'next/server';
 import { BigQuery } from '@google-cloud/bigquery';
 
-// Helper function to run a query and flatten the result into a simple array
 async function fetchDistinctValues(bigquery: BigQuery, query: string, fieldName: string) {
   const [rows] = await bigquery.query(query);
-  // The result is an array of objects, e.g., [{channel: 'Direct'}, {channel: 'Organic'}].
-  // We map it to a simple array of strings: ['Direct', 'Organic']
-  return rows.map(row => row[fieldName]).filter(Boolean); // filter(Boolean) removes any null/undefined values
+  return rows.map(row => row[fieldName]).filter(Boolean);
 }
 
 export async function GET() {
@@ -26,19 +23,10 @@ export async function GET() {
 
     const datasetPrefix = `\`${projectId}.dreamdata_demo`;
 
-    // Define all the queries you provided
     const queries = {
       stageNames: {
         query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\``,
         field: 'stage_name'
-      },
-      channels: {
-        query: `SELECT DISTINCT session.channel FROM ${datasetPrefix}.events\``,
-        field: 'channel'
-      },
-      sources: {
-        query: `SELECT DISTINCT session.source FROM ${datasetPrefix}.events\``, // Assuming session.source
-        field: 'source'
       },
       countries: {
         query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\``,
@@ -50,26 +38,21 @@ export async function GET() {
       }
     };
 
-    // Run all queries in parallel for efficiency
     const [
       stageNames,
-      channels,
-      sources,
       countries,
       employeeBuckets
     ] = await Promise.all([
       fetchDistinctValues(bigquery, queries.stageNames.query, queries.stageNames.field),
-      fetchDistinctValues(bigquery, queries.channels.query, queries.channels.field),
-      fetchDistinctValues(bigquery, queries.sources.query, queries.sources.field),
       fetchDistinctValues(bigquery, queries.countries.query, queries.countries.field),
       fetchDistinctValues(bigquery, queries.employeeBuckets.query, queries.employeeBuckets.field),
     ]);
 
-    // Return all the option lists in a single JSON object
+    // NEW: Added employeeBuckets to the returned object
     return NextResponse.json({
       outcomes: stageNames.sort(),
       countries: countries.sort(),
-      // We can add channels, sources, etc. here as we build the UI for them
+      employeeBuckets: employeeBuckets.sort(), 
     });
 
   } catch (error) {
