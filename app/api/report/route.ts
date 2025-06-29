@@ -7,26 +7,17 @@ const segmentationSqlMapping: Record<string, string> = {
   numberOfEmployees: 'c.properties.number_of_employees',
 };
 
-// This helper builds the correct aggregation based on a metric name like "NewBiz_value"
 const buildMetricAggregation = (metric: string, alias: string = ''): string => {
     const [stageName, metricType] = metric.split('_');
     const finalAlias = alias || metric;
-    
-    // THE FIX IS HERE: Wrap the finalAlias in backticks ` ` to handle spaces.
     if (metricType === 'value') {
         return `ROUND(SUM(IF(s.stage_name = '${stageName}', s.value, 0)), 2) AS \`${finalAlias}\``;
     }
-    // 'deals'
     return `COUNT(DISTINCT IF(s.stage_name = '${stageName}', s.dd_stage_id, NULL)) AS \`${finalAlias}\``;
 };
 
 export async function POST(request: Request) {
   const config = await request.json();
-  const { selectedMetrics } = config;
-
-  if (!selectedMetrics || Object.keys(selectedMetrics).length === 0) {
-    return NextResponse.json({ kpiData: {}, chartData: [] });
-  }
 
   try {
     const credentials = JSON.parse(process.env.GOOGLE_CREDENTIALS_JSON || '{}');
@@ -52,41 +43,53 @@ export async function POST(request: Request) {
     }
     
     const fromAndJoins = `FROM \`${projectId}.dreamdata_demo.stages\` AS s LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id`;
-    const whereClause = `WHERE 1=1 ${timeFilter} ${countryFilter} ${employeeFilter}`;
+    const baseWhereClause = `WHERE 1=1 ${timeFilter} ${countryFilter} ${employeeFilter}`;
+    
+    // --- Run Queries based on Report Focus ---
+    let kpiData: any = {};
+    let chartData: any[] = [];
 
+    // Always calculate the main KPI metrics
     const kpiMetricsToCalc = Object.entries(config.selectedMetrics).flatMap(([stage, types]) => (types as string[]).map(type => `${stage}_${type}`));
-    const kpiSelections = kpiMetricsToCalc.length > 0 ? kpiMetricsToCalc.map(metric => buildMetricAggregation(metric)).join(',\n        ') : 'SELECT 1';
-    const kpiQuery = `SELECT ${kpiSelections} ${fromAndJoins} ${whereClause}`;
-
-    let timeSeriesQuery = '';
-    if (config.chartMode === 'single_segmented') {
-        const metricSql = buildMetricAggregation(config.singleChartMetric, 'value');
-        const segmentSql = segmentationSqlMapping[config.segmentationProperty];
-        timeSeriesQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${segmentSql} as segment, ${metricSql} ${fromAndJoins} ${whereClause} AND ${segmentSql} IS NOT NULL GROUP BY month, segment ORDER BY month ASC, segment ASC`;
-    } else { 
-        const multiMetricSelections = config.multiChartMetrics.map((metric: string) => buildMetricAggregation(metric)).join(',\n');
-        timeSeriesQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${multiMetricSelections} ${fromAndJoins} ${whereClause} GROUP BY month ORDER BY month ASC`;
+    if (kpiMetricsToCalc.length > 0) {
+        const kpiSelections = kpiMetricsToCalc.map(metric => buildMetricAggregation(metric)).join(',\n        ');
+        const kpiQuery = `SELECT ${kpiSelections} ${fromAndJoins} ${baseWhereClause}`;
+        const [[kpiResult]] = await bigquery.query({ query: kpiQuery, location: 'EU', params: queryParams });
+        kpiData = kpiResult || {};
     }
 
-    const kpiOptions = { query: kpiQuery, location: 'EU', params: queryParams };
-    const timeSeriesOptions = { query: timeSeriesQuery, location: 'EU', params: queryParams };
+    // Generate Chart/Table data based on the selected focus
+    if (config.reportFocus === 'segmentation') {
+        const segmentSql = segmentationSqlMapping[config.segmentationProperty];
+        const multiMetricSelections = config.multiChartMetrics.map((metric: string) => buildMetricAggregation(metric)).join(',\n');
+        
+        if (multiMetricSelections) {
+            const segmentationQuery = `
+                SELECT ${segmentSql} as segment, ${multiMetricSelections}
+                ${fromAndJoins} ${baseWhereClause} AND ${segmentSql} IS NOT NULL
+                GROUP BY segment ORDER BY segment ASC
+            `;
+            const [segmentationRows] = await bigquery.query({ query: segmentationQuery, location: 'EU', params: queryParams });
+            chartData = segmentationRows;
+        }
 
-    console.log("--- Executing KPI Query ---", kpiOptions.query);
-    console.log("--- Executing Time Series Query ---", timeSeriesOptions.query);
-    
-    const [[kpiRows], [timeSeriesRows]] = await Promise.all([
-        kpiMetricsToCalc.length > 0 ? bigquery.query(kpiOptions) : Promise.resolve([[]]),
-        timeSeriesQuery && config.multiChartMetrics.length > 0 ? bigquery.query(timeSeriesOptions) : Promise.resolve([[]]),
-    ]);
-    
-    console.log("--- KPI Result ---", kpiRows);
-    console.log("--- Time Series Result ---", timeSeriesRows);
-    
-    const kpiData = kpiRows[0] || {};
-    const chartData = timeSeriesRows.map(row => ({
-        ...row,
-        month: row.month ? new Date(row.month.value).toISOString() : null,
-    }));
+    } else { // 'time_series' focus
+        let timeSeriesQuery = '';
+        if (config.chartMode === 'single_segmented') {
+            const metricSql = buildMetricAggregation(config.singleChartMetric, 'value');
+            const segmentSql = segmentationSqlMapping[config.segmentationProperty];
+            timeSeriesQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${segmentSql} as segment, ${metricSql} ${fromAndJoins} ${baseWhereClause} AND ${segmentSql} IS NOT NULL GROUP BY month, segment ORDER BY month ASC, segment ASC`;
+        } else { // 'multi_metric' mode
+            const multiMetricSelections = config.multiChartMetrics.map((metric: string) => buildMetricAggregation(metric)).join(',\n');
+            if (multiMetricSelections) {
+                timeSeriesQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) AS month, ${multiMetricSelections} ${fromAndJoins} ${baseWhereClause} GROUP BY month ORDER BY month ASC`;
+            }
+        }
+        if (timeSeriesQuery) {
+            const [timeSeriesRows] = await bigquery.query({ query: timeSeriesQuery, location: 'EU', params: queryParams });
+            chartData = timeSeriesRows.map(row => ({...row, month: row.month ? new Date(row.month.value).toISOString() : null }));
+        }
+    }
 
     return NextResponse.json({ kpiData, chartData });
 
