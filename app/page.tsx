@@ -1,44 +1,45 @@
 // app/page.tsx
 "use client"; 
 
-import { useState, useEffect } from 'react'; // Import useEffect
+import { useState, useEffect } from 'react';
 import KpiCard from './components/KpiCard';
 
 export default function HomePage() {
   // --- STATE MANAGEMENT ---
-  // State for the configuration panel
   const [outcome, setOutcome] = useState('NewBiz');
   const [timePeriod, setTimePeriod] = useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
-
-  // New state to hold the data we fetch from our API
   const [reportData, setReportData] = useState<any>(null);
-  // New state to track when data is being loaded
   const [isLoading, setIsLoading] = useState(true);
 
   // --- DATA FETCHING ---
-  // This useEffect hook runs whenever a configuration dependency changes
   useEffect(() => {
-    // Define the function to fetch data
     const fetchData = async () => {
-      setIsLoading(true); // Set loading to true before fetching
+      setIsLoading(true);
       try {
         const response = await fetch('/api/report', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ outcome, timePeriod, companyCountry }), // Send current config
+          body: JSON.stringify({ outcome, timePeriod, companyCountry }),
         });
         const data = await response.json();
-        setReportData(data); // Store the returned data in our state
+        setReportData(data);
       } catch (error) {
         console.error("Failed to fetch report data:", error);
-        setReportData(null); // Clear data on error
+        setReportData(null);
       }
-      setIsLoading(false); // Set loading to false after fetching
+      setIsLoading(false);
     };
 
-    fetchData(); // Call the fetch function
-  }, [outcome, timePeriod, companyCountry]); // Dependency array: re-run when these change
+    fetchData();
+  }, [outcome, timePeriod, companyCountry]);
+
+  // --- CURRENT CONFIGURATION OBJECT (for display) ---
+  const currentConfig = {
+    outcome,
+    timePeriod,
+    companyCountry,
+  };
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
@@ -105,7 +106,6 @@ export default function HomePage() {
       {/* Right Report Canvas */}
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
-        {/* KPI Cards now use the data from our state, with a loading indicator */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {isLoading ? (
             <p className="col-span-3">Loading data...</p>
@@ -119,9 +119,15 @@ export default function HomePage() {
             <p className="col-span-3">No data available.</p>
           )}
         </div>
-        <div className="space-y-8">
-          {/* We will add the Chart and Table back later */}
+        
+        {/* --- NEW: Debugging Section to Display Current State --- */}
+        <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
+          <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
+          <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
+            {JSON.stringify(currentConfig, null, 2)}
+          </pre>
         </div>
+        
       </div>
     </main>
   );
