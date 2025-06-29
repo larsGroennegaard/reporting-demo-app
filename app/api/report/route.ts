@@ -14,6 +14,10 @@ export async function POST(request: Request) {
       credentials: credentials,
     });
 
+    const queryParams: { outcome: string; country?: string } = {
+      outcome: config.outcome,
+    };
+
     let timeFilter = '';
     switch (config.timePeriod) {
       case 'last_month':
@@ -27,6 +31,12 @@ export async function POST(request: Request) {
         break;
     }
 
+    let countryFilter = '';
+    if (config.companyCountry && config.companyCountry !== 'all') {
+      countryFilter = `AND c.properties.country = @country`;
+      queryParams.country = config.companyCountry;
+    }
+
     const sqlQuery = `
       SELECT
         ROUND(SUM(s.value), 2) AS totalValue,
@@ -38,14 +48,13 @@ export async function POST(request: Request) {
       WHERE
         s.stage_name = @outcome
         ${timeFilter}
+        ${countryFilter}
     `;
 
     const options = {
       query: sqlQuery,
-      location: 'EU', 
-      params: {
-        outcome: config.outcome,
-      },
+      location: 'EU',
+      params: queryParams,
     };
     
     console.log("--- Executing BigQuery Query ---");
@@ -58,7 +67,8 @@ export async function POST(request: Request) {
     console.log(rows);
 
     const result = rows[0] || {};
-    // Parse the data into numbers, but do not format it as currency here.
+    // Parse the data into numbers and return them directly.
+    // The frontend KpiCard component will handle the currency formatting.
     const numericResult = {
         totalValue: parseFloat(result.totalValue || 0),
         totalDeals: parseInt(result.totalDeals || '0', 10),
