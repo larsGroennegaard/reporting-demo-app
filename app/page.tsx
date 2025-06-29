@@ -23,21 +23,18 @@ export default function HomePage() {
   const [companyCountry, setCompanyCountry] = useState('all');
   const [numberOfEmployees, setNumberOfEmployees] = useState('all');
   const [chartMode, setChartMode] = useState('single_segmented');
-  
-  // This is now the single source of truth for the chart's "single metric" mode
   const [singleChartMetric, setSingleChartMetric] = useState('NewBiz_value');
   const [segmentationProperty, setSegmentationProperty] = useState('companyCountry');
-  // This is now the single source of truth for the chart's "multi-metric" mode
   const [multiChartMetrics, setMultiChartMetrics] = useState<string[]>(['NewBiz_value', 'SQL_deals']);
 
   const [kpiData, setKpiData] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
   const [stageOptions, setStageOptions] = useState<string[]>([]);
   const [countryOptions, setCountryOptions] = useState<string[]>([]);
   const [employeeOptions, setEmployeeOptions] = useState<string[]>([]);
 
-  // A memoized list of all available metrics based on the main selection, e.g., ["NewBiz_deals", "NewBiz_value"]
   const availableMetrics = useMemo(() => {
     return Object.entries(selectedMetrics).flatMap(([stage, types]) => 
       types.map(type => `${stage}_${type}`)
@@ -57,10 +54,28 @@ export default function HomePage() {
     fetchDropdownOptions();
   }, []);
 
-  const currentConfig = { selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics };
-
+  // Combine all config into one object for the API call and debug view
+  const currentConfig = { 
+    selectedMetrics, 
+    kpiCardConfig, 
+    timePeriod, 
+    companyCountry, 
+    numberOfEmployees, 
+    chartMode, 
+    singleChartMetric, 
+    segmentationProperty, 
+    multiChartMetrics 
+  };
+  
+  // This useEffect hook fetches all report data
   useEffect(() => {
-    if (Object.keys(selectedMetrics).length === 0) { setIsLoading(false); return; };
+    if (Object.keys(selectedMetrics).length === 0) { 
+        setIsLoading(false); 
+        setKpiData({});
+        setChartData([]);
+        return; 
+    };
+
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -72,15 +87,20 @@ export default function HomePage() {
         const data = await response.json();
         setKpiData(data.kpiData);
         setChartData(data.chartData);
-      } catch (error) { console.error("Failed to fetch report data:", error); setKpiData(null); setChartData([]); }
+      } catch (error) { 
+        console.error("Failed to fetch report data:", error); 
+        setKpiData(null); 
+        setChartData([]); 
+      }
       setIsLoading(false);
     };
     fetchData();
-  }, [selectedMetrics, timePeriod, companyCountry, numberOfEmployees]);
+  // THE FIX IS HERE: The dependency array now includes all chart configuration states
+  }, [selectedMetrics, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics]);
 
   const handleMetricChange = (stageName: string, metricType: 'deals' | 'value') => {
     setSelectedMetrics(prev => {
-      const newConfig = JSON.parse(JSON.stringify(prev)); // Deep copy
+      const newConfig = JSON.parse(JSON.stringify(prev));
       const stageMetrics = newConfig[stageName] || [];
       if (stageMetrics.includes(metricType)) {
         newConfig[stageName] = stageMetrics.filter((m: string) => m !== metricType);
@@ -102,7 +122,6 @@ export default function HomePage() {
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
-      {/* LEFT PANEL */}
       <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
         <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
         <div className="space-y-6">
@@ -114,7 +133,6 @@ export default function HomePage() {
             </div>
         </div>
       </div>
-      {/* RIGHT PANEL */}
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
         <div className="mb-8"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{kpiCardConfig.map(card => (<div key={card.id} className="bg-gray-800/50 p-2 rounded-lg border border-gray-700"><div className="flex justify-end mb-1"><button onClick={() => removeKpiCard(card.id)} className="text-gray-500 hover:text-red-400 text-xs">✖</button></div><select value={card.metric} onChange={(e) => updateKpiCardMetric(card.id, e.target.value)} className="mb-2 block w-full text-xs bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md">{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select><KpiCard title={card.metric.replace(/_/g, ' ')} value={kpiData ? kpiData[card.metric] : "-"} /></div>))}</div><button onClick={addKpiCard} className="mt-4 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">+ Add KPI Card</button></div>
