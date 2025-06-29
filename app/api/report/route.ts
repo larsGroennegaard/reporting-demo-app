@@ -14,9 +14,6 @@ export async function POST(request: Request) {
       credentials: credentials,
     });
 
-    // --- DYNAMIC SQL GENERATION ---
-
-    // 1. Create a dynamic time filter based on the configuration
     let timeFilter = '';
     switch (config.timePeriod) {
       case 'last_month':
@@ -30,33 +27,54 @@ export async function POST(request: Request) {
         break;
     }
 
-    // 2. Build the main SQL query using the real table names and dynamic filters
-    // NOTE: We are making an assumption that 'influencedValue' can be calculated from a column
-    // and that 'totalDeals' is the count of distinct companies for that stage.
-    // We will use placeholders for now.
     const sqlQuery = `
       SELECT
-        FORMAT("%.2f", SUM(s.value)) as totalValue,
-        FORMAT("%.2f", 0) as influencedValue,  -- Placeholder for influenced value
-        COUNT(DISTINCT s.dd_company_id) as totalDeals
+        ROUND(SUM(s.value), 2) AS totalValue,
+        COUNT(DISTINCT s.dd_stage_id) as totalDeals,
+        ROUND(SUM(s.value), 2) AS influencedValue
       FROM
         \`${projectId}.dreamdata_demo.stages\` AS s
+        LEFT JOIN \`${projectId}.dreamdata_demo.companies\` AS c ON s.dd_company_id = c.dd_company_id
       WHERE
         s.stage_name = @outcome
-        ${timeFilter} 
+        ${timeFilter}
     `;
 
     const options = {
       query: sqlQuery,
-      location: 'EU', // Make sure this matches your dataset's location
+      location: 'EU', 
       params: {
         outcome: config.outcome,
       },
     };
     
-    // Execute the query and return the result
+    // --- NEW: Logging the query before execution ---
+    console.log("--- Executing BigQuery Query ---");
+    console.log("SQL:", options.query);
+    console.log("Params:", options.params);
+    
     const [rows] = await bigquery.query(options);
-    return NextResponse.json(rows[0] || {});
+
+    // --- NEW: Logging the raw result from BigQuery ---
+    console.log("--- Raw Result from BigQuery ---");
+    console.log(rows);
+
+    const result = rows[0] || {};
+    const formattedResult = {
+        totalValue: parseFloat(result.totalValue || 0),
+        totalDeals: parseInt(result.totalDeals || '0', 10),
+        influencedValue: parseFloat(result.influencedValue || 0)
+    };
+    
+    const currencyFormatter = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+    });
+
+    formattedResult.totalValue = currencyFormatter.format(formattedResult.totalValue);
+    formattedResult.influencedValue = currencyFormatter.format(formattedResult.influencedValue);
+
+    return NextResponse.json(formattedResult);
 
   } catch (error) {
     console.error("BigQuery query failed:", error);
