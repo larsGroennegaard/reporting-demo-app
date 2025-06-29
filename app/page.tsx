@@ -6,6 +6,7 @@ import KpiCard from './components/KpiCard';
 import Chart from './components/Chart';
 import Table from './components/Table';
 
+// --- FIXED: Added the missing interface definitions back ---
 interface SelectedMetrics {
   [stageName: string]: ('deals' | 'value')[];
 }
@@ -41,12 +42,12 @@ export default function HomePage() {
     ).sort();
   }, [selectedMetrics]);
 
+  const currentConfig = { reportFocus, selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics };
+
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
-        const response = await fetch('/api/config-options', {
-            headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }
-        });
+        const response = await fetch('/api/config-options', { headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }});
         const data = await response.json();
         setStageOptions(data.outcomes || []);
         setCountryOptions(data.countries || []);
@@ -55,8 +56,6 @@ export default function HomePage() {
     };
     fetchDropdownOptions();
   }, []);
-
-  const currentConfig = { reportFocus, selectedMetrics, kpiCardConfig, timePeriod, companyCountry, numberOfEmployees, chartMode, singleChartMetric, segmentationProperty, multiChartMetrics };
 
   useEffect(() => {
     if (Object.keys(selectedMetrics).length === 0) { 
@@ -138,12 +137,7 @@ export default function HomePage() {
       <div className="flex-1 p-8 overflow-y-auto">
         <h1 className="text-3xl font-bold mb-6 text-white">Your Report</h1>
         <div className="mb-8"><div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{kpiCardConfig.map(card => (<div key={card.id} className="bg-gray-800/50 p-2 rounded-lg border border-gray-700"><div className="flex justify-end mb-1"><button onClick={() => removeKpiCard(card.id)} className="text-gray-500 hover:text-red-400 text-xs">✖</button></div><select value={card.metric} onChange={(e) => updateKpiCardMetric(card.id, e.target.value)} className="mb-2 block w-full text-xs bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md">{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select><KpiCard title={card.metric.replace(/_/g, ' ')} value={isLoading ? '...' : (kpiData ? kpiData[card.metric] : "-")} /></div>))}</div><button onClick={addKpiCard} className="mt-4 text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded">+ Add KPI Card</button></div>
-        <div className="space-y-8">
-            <Chart data={chartData} mode={reportFocus === 'segmentation' ? 'bar' : chartMode} config={currentConfig} />
-            
-            {/* THE FIX IS HERE: Removed the unnecessary 'config' prop */}
-            <Table data={chartData} mode={reportFocus === 'segmentation' ? 'segmentation' : 'time_series'} />
-        </div>
+        <div className="space-y-8"><Chart data={chartData} mode={reportFocus === 'segmentation' ? 'bar' : chartMode} config={currentConfig} /><Table data={chartData} mode={reportFocus} config={currentConfig} /></div>
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg"><h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3><pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">{JSON.stringify(currentConfig, null, 2)}</pre></div>
       </div>
     </main>
