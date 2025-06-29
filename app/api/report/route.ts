@@ -48,33 +48,24 @@ export async function POST(request: Request) {
       },
     };
     
-    // --- NEW: Logging the query before execution ---
     console.log("--- Executing BigQuery Query ---");
     console.log("SQL:", options.query);
     console.log("Params:", options.params);
     
     const [rows] = await bigquery.query(options);
 
-    // --- NEW: Logging the raw result from BigQuery ---
     console.log("--- Raw Result from BigQuery ---");
     console.log(rows);
 
     const result = rows[0] || {};
-    const formattedResult = {
+    // Parse the data into numbers, but do not format it as currency here.
+    const numericResult = {
         totalValue: parseFloat(result.totalValue || 0),
         totalDeals: parseInt(result.totalDeals || '0', 10),
         influencedValue: parseFloat(result.influencedValue || 0)
     };
     
-    const currencyFormatter = new Intl.NumberFormat('en-US', {
-        style: 'currency',
-        currency: 'USD',
-    });
-
-    formattedResult.totalValue = currencyFormatter.format(formattedResult.totalValue);
-    formattedResult.influencedValue = currencyFormatter.format(formattedResult.influencedValue);
-
-    return NextResponse.json(formattedResult);
+    return NextResponse.json(numericResult);
 
   } catch (error) {
     console.error("BigQuery query failed:", error);
