@@ -6,14 +6,45 @@ import KpiCard from './components/KpiCard';
 
 export default function HomePage() {
   // --- STATE MANAGEMENT ---
+  // State for the selected configuration
   const [outcome, setOutcome] = useState('NewBiz');
   const [timePeriod, setTimePeriod] = useState('this_year');
   const [companyCountry, setCompanyCountry] = useState('all');
+  
+  // State for the data returned by the main report API
   const [reportData, setReportData] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // -- NEW: State to hold the dynamic dropdown options --
+  const [outcomeOptions, setOutcomeOptions] = useState<string[]>([]);
+  const [countryOptions, setCountryOptions] = useState<string[]>([]);
+
   // --- DATA FETCHING ---
+
+  // NEW: This useEffect hook fetches the options for the dropdowns once, when the page loads.
   useEffect(() => {
+    const fetchDropdownOptions = async () => {
+      try {
+        const response = await fetch('/api/config-options');
+        const data = await response.json();
+        setOutcomeOptions(data.outcomes || []);
+        setCountryOptions(data.countries || []);
+        // Set a default outcome if the list has values
+        if (data.outcomes && data.outcomes.length > 0) {
+            setOutcome(data.outcomes[0]);
+        }
+      } catch (error) {
+        console.error("Failed to fetch dropdown options:", error);
+      }
+    };
+    fetchDropdownOptions();
+  }, []); // The empty array [] means this effect runs only once when the component mounts.
+
+  // This useEffect hook fetches the main report data whenever a config value changes.
+  useEffect(() => {
+    // Don't fetch if we don't have any outcome options yet
+    if (!outcome) return;
+
     const fetchData = async () => {
       setIsLoading(true);
       try {
@@ -34,12 +65,7 @@ export default function HomePage() {
     fetchData();
   }, [outcome, timePeriod, companyCountry]);
 
-  // --- CURRENT CONFIGURATION OBJECT (for display) ---
-  const currentConfig = {
-    outcome,
-    timePeriod,
-    companyCountry,
-  };
+  const currentConfig = { outcome, timePeriod, companyCountry };
 
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
@@ -54,6 +80,7 @@ export default function HomePage() {
         <div className="space-y-6">
           <div>
             <label htmlFor="outcome" className="block text-sm font-medium text-gray-400">Outcome</label>
+            {/* UPDATED: This select now maps over the dynamic outcomeOptions state */}
             <select
               id="outcome"
               name="outcome"
@@ -61,9 +88,9 @@ export default function HomePage() {
               onChange={(e) => setOutcome(e.target.value)}
               className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
             >
-              <option value="MQL">MQL</option>
-              <option value="SQL">SQL</option>
-              <option value="NewBiz">NewBiz</option>
+              {outcomeOptions.map(option => (
+                <option key={option} value={option}>{option}</option>
+              ))}
             </select>
           </div>
           <div>
@@ -85,6 +112,7 @@ export default function HomePage() {
               </div>
               <div>
                 <label htmlFor="companyCountry" className="block text-sm font-medium text-gray-400">Company Country</label>
+                 {/* UPDATED: This select now maps over the dynamic countryOptions state */}
                 <select
                   id="companyCountry"
                   name="companyCountry"
@@ -93,9 +121,9 @@ export default function HomePage() {
                   className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                 >
                   <option value="all">All Countries</option>
-                  <option value="usa">USA</option>
-                  <option value="germany">Germany</option>
-                  <option value="uk">United Kingdom</option>
+                  {countryOptions.map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -120,14 +148,12 @@ export default function HomePage() {
           )}
         </div>
         
-        {/* --- NEW: Debugging Section to Display Current State --- */}
         <div className="mt-8 bg-gray-800 p-4 shadow rounded-lg">
           <h3 className="text-lg font-semibold text-gray-100 mb-2">Current Configuration State</h3>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
             {JSON.stringify(currentConfig, null, 2)}
           </pre>
         </div>
-        
       </div>
     </main>
   );
