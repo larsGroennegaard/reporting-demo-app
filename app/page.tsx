@@ -71,6 +71,7 @@ export default function HomePage() {
   }, [reportArchetype, outcomeMetrics, engagementMetrics, influencedMetrics]);
 
   // --- CLEANED UP CONFIGURATION OBJECTS ---
+  // --- CLEANED UP CONFIGURATION OBJECTS ---
   const outcomeConfig = useMemo(() => ({
     reportArchetype: 'outcome_analysis',
     reportFocus,
@@ -80,13 +81,12 @@ export default function HomePage() {
     singleChartMetric,
     multiChartMetrics,
     segmentationProperty,
-    metrics: outcomeMetrics,
+    selectedMetrics: outcomeMetrics, // <-- FIX: Renamed 'metrics' back to 'selectedMetrics'
     filters: {
         countries: selectedCountries,
         employeeSizes: selectedEmployeeSizes,
     }
   }), [reportFocus, timePeriod, kpiCardConfig, chartMode, singleChartMetric, multiChartMetrics, segmentationProperty, outcomeMetrics, selectedCountries, selectedEmployeeSizes]);
-  
   const engagementConfig = useMemo(() => ({
       reportArchetype: 'engagement_analysis',
       reportFocus,
