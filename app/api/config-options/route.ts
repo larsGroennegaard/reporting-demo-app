@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
         countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\``, field: 'country' },
         employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\``, field: 'number_of_employees' },
         eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\``, field: 'event_name' },
-        signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s`, field: 'name'}
+        signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s\``, field: 'name'}
     };
 
     const [ stageNames, countries, employeeBuckets, eventNames, signalNames ] = await Promise.all([
