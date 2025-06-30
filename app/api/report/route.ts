@@ -3,13 +3,21 @@ import { NextResponse, NextRequest } from 'next/server';
 import { BigQuery } from '@google-cloud/bigquery';
 
 // --- HELPER FUNCTIONS ---
+
+/**
+ * Sanitizes a string for use in a SQL IN clause by escaping single quotes.
+ * @param value The string to sanitize.
+ * @returns The sanitized string.
+ */
+const sanitizeForSql = (value: string) => value.replace(/'/g, "\\'");
+
 const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'timestamp'): string => {
   const now = new Date();
   switch (timePeriod) {
     case 'this_year':
       return ` AND ${timestampColumn} >= TIMESTAMP('${now.getFullYear()}-01-01') AND ${timestampColumn} < TIMESTAMP('${now.getFullYear() + 1}-01-01')`;
     case 'last_quarter':
-      return ` AND ${timestampColumn} >=  TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 QUARTER), QUARTER)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))`;
+      return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 QUARTER), QUARTER)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))`;
     case 'last_month':
        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
     default:
@@ -21,17 +29,19 @@ const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): str
   let whereClauses = "WHERE 1=1";
   whereClauses += getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
 
+  // FIX: Use sanitizer for all filter values
   if (config.filters?.eventNames?.length > 0) {
-    whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${e}'`).join(',')})`;
+    whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
   }
   if (config.filters?.signals?.length > 0) {
-    whereClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${s}'`).join(',')}))`;
+    whereClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
   }
   if (config.filters?.url) {
-    whereClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${config.filters.url}%'`;
+    whereClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${sanitizeForSql(config.filters.url)}%'`;
   }
   return whereClauses;
 };
+
 
 // --- MAIN API HANDLER ---
 export async function POST(request: NextRequest) {
@@ -55,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     // --- ROUTE BY REPORT ARCHETYPE ---
     if (config.reportArchetype === 'engagement_analysis') {
-      const whereClause = buildEngagementWhereClause(config);
+      const whereClause = buildEngagementWhereClause(config, 'e');
       
       let kpiSelects = new Set<string>();
       if(config.metrics.base.includes('companies')) kpiSelects.add('COUNT(DISTINCT e.dd_company_id) AS companies');
@@ -64,16 +74,16 @@ export async function POST(request: NextRequest) {
       
       let influencedJoins = '';
       Object.keys(config.metrics.influenced).forEach(stage => {
-          const stageAlias = stage.replace(/\s/g, '');
-          influencedJoins += ` LEFT JOIN UNNEST(e.stages) AS s_${stageAlias} ON s_${stageAlias}.name = '${stage}'`;
-          if(config.metrics.influenced[stage].includes('deals')) kpiSelects.add(`COUNT(DISTINCT s_${stageAlias}.dd_stage_id) AS influenced_${stage}_deals`);
-          if(config.metrics.influenced[stage].includes('value')) kpiSelects.add(`SUM(s_${stageAlias}.value) AS influenced_${stage}_value`);
+          const sanitizedStage = stage.replace(/\s/g, '_');
+          influencedJoins += ` LEFT JOIN UNNEST(e.stages) AS s_${sanitizedStage} ON s_${sanitizedStage}.name = '${sanitizeForSql(stage)}'`;
+          if(config.metrics.influenced[stage].includes('deals')) kpiSelects.add(`COUNT(DISTINCT s_${sanitizedStage}.dd_stage_id) AS influenced_${sanitizedStage}_deals`);
+          if(config.metrics.influenced[stage].includes('value')) kpiSelects.add(`SUM(s_${sanitizedStage}.value) AS influenced_${sanitizedStage}_value`);
       });
 
       const kpiQuery = kpiSelects.size > 0 ? `SELECT ${Array.from(kpiSelects).join(', ')} FROM ${eventsTable} AS e ${influencedJoins} ${whereClause}` : '';
 
-      let chartQuery = '';
-      // ... (chart query generation logic for engagement would go here) ...
+      // Chart query logic would go here...
+      const chartQuery = '';
       
       const [[kpiResults]] = kpiQuery ? await bigquery.query(kpiQuery) : [[]];
       const chartResults: any[] = []; // Placeholder
@@ -90,15 +100,17 @@ export async function POST(request: NextRequest) {
       
       let whereClause = "WHERE 1=1";
       whereClause += getTimePeriodClause(config.timePeriod, 's.timestamp');
-      if(config.selectedCountries?.length > 0) whereClause += ` AND c.properties.country IN (${config.selectedCountries.map((c:string) => `'${c}'`).join(',')})`;
-      if(config.selectedEmployeeSizes?.length > 0) whereClause += ` AND c.properties.number_of_employees IN (${config.selectedEmployeeSizes.map((s:string) => `'${s}'`).join(',')})`;
+      // FIX: Use sanitizer for all filter values
+      if(config.selectedCountries?.length > 0) whereClause += ` AND c.properties.country IN (${config.selectedCountries.map((c:string) => `'${sanitizeForSql(c)}'`).join(',')})`;
+      if(config.selectedEmployeeSizes?.length > 0) whereClause += ` AND c.properties.number_of_employees IN (${config.selectedEmployeeSizes.map((s:string) => `'${sanitizeForSql(s)}'`).join(',')})`;
       
       // KPI Query
       const kpiSelects = Object.entries(config.selectedMetrics).flatMap(([stage, types]) =>
         (types as string[]).map(type => {
-          const alias = `${stage}_${type}`;
-          if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${stage}' THEN s.dd_stage_id ELSE NULL END) AS ${alias}`;
-          if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${stage}' THEN s.value ELSE 0 END) AS ${alias}`;
+          // FIX: Sanitize stage name to create a valid SQL alias
+          const sanitizedAlias = `${stage.replace(/\s/g, '_')}_${type}`;
+          if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${sanitizeForSql(stage)}' THEN s.dd_stage_id ELSE NULL END) AS ${sanitizedAlias}`;
+          if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(stage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
           return '';
         })
       ).join(', ');
@@ -109,7 +121,7 @@ export async function POST(request: NextRequest) {
       let chartQuery = '';
       if (config.reportFocus === 'segmentation') {
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        chartQuery = `SELECT ${segmentCol} as segment, ${kpiSelects} ${fromClause} ${whereClause} GROUP BY segment ORDER BY segment`;
+        chartQuery = `SELECT ${segmentCol} as segment, ${kpiSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment`;
       } else { // time_series
         if (config.chartMode === 'single_segmented') {
           const [stage, type] = config.singleChartMetric.split('_');
@@ -118,14 +130,15 @@ export async function POST(request: NextRequest) {
           chartQuery = `
             SELECT DATE_TRUNC(s.timestamp, MONTH) as month, ${segmentCol} as segment, ${metricSelect} as value
             ${fromClause}
-            ${whereClause} AND s.stage_name = '${stage}'
-            GROUP BY month, segment ORDER BY month
+            ${whereClause} AND s.stage_name = '${sanitizeForSql(stage)}'
+            GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month
           `;
         } else { // multi_metric
           const chartSelects = config.multiChartMetrics.map((metric: string) => {
-            const [stage, type] = metric.split('_');
-            if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${stage}' THEN s.dd_stage_id ELSE NULL END) AS ${metric}`;
-            if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${stage}' THEN s.value ELSE 0 END) AS ${metric}`;
+            const [rawStage, type] = metric.split(/_(deals|value)$/);
+            const sanitizedAlias = metric.replace(/\s/g, '_');
+            if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.dd_stage_id ELSE NULL END) AS ${sanitizedAlias}`;
+            if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
             return '';
           }).join(', ');
           chartQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) as month, ${chartSelects} ${fromClause} ${whereClause} GROUP BY month ORDER BY month`;
