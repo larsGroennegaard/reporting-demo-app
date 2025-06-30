@@ -19,16 +19,29 @@ export async function GET(request: NextRequest) {
     const projectId = process.env.GCP_PROJECT_ID;
     if (!projectId) { throw new Error("GCP_PROJECT_ID environment variable not set."); }
     const bigquery = new BigQuery({ projectId, credentials });
-    const datasetPrefix = `\`${projectId}.dreamdata_demo`;
-
-    // --- MODIFIED: Added queries for event names and signals ---
-const queries = {
-    stageNames: { query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\` WHERE stage_name IS NOT NULL`, field: 'stage_name' },
-    countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\` WHERE properties.country IS NOT NULL`, field: 'country' },
-    employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\` WHERE properties.number_of_employees IS NOT NULL`, field: 'number_of_employees' },
-    eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\` WHERE event_name IS NOT NULL`, field: 'event_name' },
-    signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s WHERE s.name IS NOT NULL`, field: 'name'}
-};
+    
+    const queries = {
+        stageNames: { 
+            query: `SELECT DISTINCT stage_name FROM \`${projectId}.dreamdata_demo.stages\` WHERE stage_name IS NOT NULL`, 
+            field: 'stage_name' 
+        },
+        countries: { 
+            query: `SELECT DISTINCT properties.country FROM \`${projectId}.dreamdata_demo.companies\` WHERE properties.country IS NOT NULL`, 
+            field: 'country' 
+        },
+        employeeBuckets: { 
+            query: `SELECT DISTINCT properties.number_of_employees FROM \`${projectId}.dreamdata_demo.companies\` WHERE properties.number_of_employees IS NOT NULL`, 
+            field: 'number_of_employees' 
+        },
+        eventNames: { 
+            query: `SELECT DISTINCT event_name FROM \`${projectId}.dreamdata_demo.events\` WHERE event_name IS NOT NULL`, 
+            field: 'event_name' 
+        },
+        signalNames: { 
+            query: `SELECT DISTINCT s.name FROM \`${projectId}.dreamdata_demo.events\`, UNNEST(signals) as s WHERE s.name IS NOT NULL`, 
+            field: 'name'
+        }
+    };
 
     const [ stageNames, countries, employeeBuckets, eventNames, signalNames ] = await Promise.all([
       fetchDistinctValues(bigquery, queries.stageNames.query, queries.stageNames.field),
@@ -45,8 +58,11 @@ const queries = {
       eventNames: eventNames.sort(),
       signalNames: signalNames.sort(),
     });
+
   } catch (error) {
     console.error("Failed to fetch config options:", error);
-    return new NextResponse(JSON.stringify({ error: 'Failed to fetch config options' }), { status: 500 });
+    // Be careful not to leak sensitive error details to the client
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return new NextResponse(JSON.stringify({ error: 'Failed to fetch config options', details: errorMessage }), { status: 500 });
   }
 }
