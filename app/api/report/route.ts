@@ -19,22 +19,6 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
   }
 };
 
-const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
-  let whereClauses = "WHERE 1=1";
-  whereClauses += getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
-  if (config.filters?.eventNames?.length > 0) {
-    whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
-  }
-  if (config.filters?.signals?.length > 0) {
-    whereClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
-  }
-  if (config.filters?.url) {
-    whereClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${sanitizeForSql(config.filters.url)}%'`;
-  }
-  return whereClauses;
-};
-
-
 // --- MAIN API HANDLER ---
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -51,20 +35,14 @@ export async function POST(request: NextRequest) {
     
     const stagesTable = `\`${projectId}.dreamdata_demo.stages\``;
     const companiesTable = `\`${projectId}.dreamdata_demo.companies\``;
-    const eventsTable = `\`${projectId}.dreamdata_demo.events\``;
-
 
     if (config.reportArchetype === 'engagement_analysis') {
-      const whereClause = buildEngagementWhereClause(config, 'e');
-      // Logic for engagement analysis...
-      // This part is still under development and will be built out next.
-      // For now, return empty data to prevent errors while we fix Outcome Analysis.
+      // Return empty for now as we are focusing on Outcome Analysis
       return NextResponse.json({ kpiData: {}, chartData: [] });
 
     } else { // --- OUTCOME ANALYSIS LOGIC ---
       
       const hasFilters = config.selectedCountries?.length > 0 || config.selectedEmployeeSizes?.length > 0;
-      // FIX: The join is now based on whether segmentation is needed, not just filters.
       const needsCompanyJoin = hasFilters || config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
       
       let fromClause = `FROM ${stagesTable} s`;
@@ -86,37 +64,48 @@ export async function POST(request: NextRequest) {
         })
       ).join(', ');
       
-      const kpiQuery = `SELECT ${kpiSelects} ${fromClause} ${whereClause}`;
+      const kpiQuery = kpiSelects ? `SELECT ${kpiSelects} ${fromClause} ${whereClause}` : '';
 
       let chartQuery = '';
       if (config.reportFocus === 'segmentation') {
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        chartQuery = `SELECT ${segmentCol} as segment, ${kpiSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment`;
+        // FIX: Build selects based on chart settings, not all available metrics
+        const chartSelects = config.multiChartMetrics.map((metric: string) => {
+            const sanitizedAlias = metric.replace(/\s/g, '_');
+            const [rawStage, type] = metric.split(/_(deals|value)$/);
+            if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.dd_stage_id ELSE NULL END) AS ${sanitizedAlias}`;
+            if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
+            return '';
+        }).join(', ');
+
+        chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
       } else { // time_series
+        // FIX: Format the timestamp to a string to avoid date parsing issues on the frontend
+        const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(s.timestamp, MONTH)) as month`;
+
         if (config.chartMode === 'single_segmented') {
           const [rawStage, type] = config.singleChartMetric.split(/_(deals|value)$/);
           const metricSelect = type === 'deals' ? `COUNT(DISTINCT s.dd_stage_id)` : `SUM(s.value)`;
           const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
           chartQuery = `
-            SELECT DATE_TRUNC(s.timestamp, MONTH) as month, ${segmentCol} as segment, ${metricSelect} as value
+            SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} as value
             ${fromClause}
             ${whereClause} AND s.stage_name = '${sanitizeForSql(rawStage)}'
             GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month
           `;
         } else { // multi_metric
           const chartSelects = config.multiChartMetrics.map((metric: string) => {
-            // FIX: Sanitize the alias here as well.
             const sanitizedAlias = metric.replace(/\s/g, '_');
             const [rawStage, type] = metric.split(/_(deals|value)$/);
             if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.dd_stage_id ELSE NULL END) AS ${sanitizedAlias}`;
             if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
             return '';
           }).join(', ');
-          chartQuery = `SELECT DATE_TRUNC(s.timestamp, MONTH) as month, ${chartSelects} ${fromClause} ${whereClause} GROUP BY month ORDER BY month`;
+          chartQuery = chartSelects ? `SELECT ${monthSelect}, ${chartSelects} ${fromClause} ${whereClause} GROUP BY month ORDER BY month` : '';
         }
       }
 
-      const [[kpiResults]] = kpiSelects ? await bigquery.query(kpiQuery) : [[]];
+      const [[kpiResults]] = kpiQuery ? await bigquery.query(kpiQuery) : [[]];
       const [chartResults] = chartQuery ? await bigquery.query(chartQuery) : [[]];
       
       return NextResponse.json({ kpiData: kpiResults, chartData: chartResults });
