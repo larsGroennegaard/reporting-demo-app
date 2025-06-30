@@ -19,6 +19,22 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
   }
 };
 
+const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
+  let whereClauses = "WHERE 1=1";
+  whereClauses += getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
+  if (config.filters?.eventNames?.length > 0) {
+    whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
+  }
+  if (config.filters?.signals?.length > 0) {
+    whereClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
+  }
+  if (config.filters?.url) {
+    whereClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${sanitizeForSql(config.filters.url)}%'`;
+  }
+  return whereClauses;
+};
+
+
 // --- MAIN API HANDLER ---
 export async function POST(request: NextRequest) {
   const apiKey = request.headers.get('x-api-key');
@@ -35,10 +51,78 @@ export async function POST(request: NextRequest) {
     
     const stagesTable = `\`${projectId}.dreamdata_demo.stages\``;
     const companiesTable = `\`${projectId}.dreamdata_demo.companies\``;
+    const eventsTable = `\`${projectId}.dreamdata_demo.events\``;
+
 
     if (config.reportArchetype === 'engagement_analysis') {
-      // Return empty for now as we are focusing on Outcome Analysis
-      return NextResponse.json({ kpiData: {}, chartData: [] });
+      const whereClause = buildEngagementWhereClause(config, 'e');
+      const needsCompanyJoin = config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
+
+      let fromClause = `FROM ${eventsTable} e`;
+      if (needsCompanyJoin) {
+        fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+      }
+      
+      const allInfluencedStages = Object.keys(config.metrics.influenced);
+      const influencedJoins = allInfluencedStages.map(stage => {
+        const sanitizedStage = stage.replace(/\s/g, '_');
+        return `LEFT JOIN UNNEST(e.stages) AS s_${sanitizedStage} ON s_${sanitizedStage}.name = '${sanitizeForSql(stage)}'`;
+      }).join(' ');
+
+      fromClause += ` ${influencedJoins}`;
+      
+      // KPI Query
+      let kpiSelects = new Set<string>();
+      if(config.metrics.base.includes('companies')) kpiSelects.add('COUNT(DISTINCT e.dd_company_id) AS companies');
+      if(config.metrics.base.includes('contacts')) kpiSelects.add('COUNT(DISTINCT e.dd_contact_id) AS contacts');
+      if(config.metrics.base.includes('events')) kpiSelects.add('COUNT(DISTINCT e.dd_event_id) AS events');
+      
+      allInfluencedStages.forEach(stage => {
+        const sanitizedStage = stage.replace(/\s/g, '_');
+        if(config.metrics.influenced[stage].includes('deals')) kpiSelects.add(`COUNT(DISTINCT s_${sanitizedStage}.dd_stage_id) AS influenced_${sanitizedStage}_deals`);
+        if(config.metrics.influenced[stage].includes('value')) kpiSelects.add(`SUM(s_${sanitizedStage}.value) AS influenced_${sanitizedStage}_value`);
+      });
+
+      const kpiQuery = kpiSelects.size > 0 ? `SELECT ${Array.from(kpiSelects).join(', ')} ${fromClause} ${whereClause}` : '';
+
+      // Chart Query
+      let chartQuery = '';
+      const getMetricSelect = (metric: string, isChart: boolean = false) => {
+        if(metric.startsWith('influenced_')) {
+          const [,,stage,type] = metric.split('_');
+          const sanitizedStage = stage.replace(/\s/g, '_');
+          const alias = isChart ? 'value' : metric;
+          return type === 'deals' 
+            ? `COUNT(DISTINCT s_${sanitizedStage}.dd_stage_id) AS ${alias}`
+            : `SUM(s_${sanitizedStage}.value) AS ${alias}`;
+        }
+        const alias = isChart ? 'value' : metric;
+        if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
+        if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
+        if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id) AS ${alias}`;
+        return '';
+      }
+      
+      if (config.reportFocus === 'segmentation') {
+        const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
+        const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
+        chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
+      } else { // time_series
+        const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(e.timestamp, MONTH)) as month`;
+        if (config.chartMode === 'single_segmented') {
+          const metricSelect = getMetricSelect(config.singleChartMetric, true);
+          const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
+          chartQuery = metricSelect ? `SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} ${fromClause} ${whereClause} GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month` : '';
+        } else { // multi_metric
+          const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
+          chartQuery = chartSelects ? `SELECT ${monthSelect}, ${chartSelects} ${fromClause} ${whereClause} GROUP BY month ORDER BY month` : '';
+        }
+      }
+
+      const [[kpiResults]] = kpiQuery ? await bigquery.query(kpiQuery) : [[]];
+      const [chartResults] = chartQuery ? await bigquery.query(chartQuery) : [[]];
+
+      return NextResponse.json({ kpiData: kpiResults, chartData: chartResults });
 
     } else { // --- OUTCOME ANALYSIS LOGIC ---
       
@@ -69,7 +153,6 @@ export async function POST(request: NextRequest) {
       let chartQuery = '';
       if (config.reportFocus === 'segmentation') {
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        // FIX: Build selects based on chart settings, not all available metrics
         const chartSelects = config.multiChartMetrics.map((metric: string) => {
             const sanitizedAlias = metric.replace(/\s/g, '_');
             const [rawStage, type] = metric.split(/_(deals|value)$/);
@@ -77,12 +160,9 @@ export async function POST(request: NextRequest) {
             if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
             return '';
         }).join(', ');
-
         chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
       } else { // time_series
-        // FIX: Format the timestamp to a string to avoid date parsing issues on the frontend
         const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(s.timestamp, MONTH)) as month`;
-
         if (config.chartMode === 'single_segmented') {
           const [rawStage, type] = config.singleChartMetric.split(/_(deals|value)$/);
           const metricSelect = type === 'deals' ? `COUNT(DISTINCT s.dd_stage_id)` : `SUM(s.value)`;
