@@ -22,13 +22,13 @@ export async function GET(request: NextRequest) {
     const datasetPrefix = `\`${projectId}.dreamdata_demo`;
 
     // --- MODIFIED: Added queries for event names and signals ---
-    const queries = {
-        stageNames: { query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\``, field: 'stage_name' },
-        countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\``, field: 'country' },
-        employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\``, field: 'number_of_employees' },
-        eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\``, field: 'event_name' },
-        signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s\``, field: 'name'}
-    };
+const queries = {
+    stageNames: { query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\``, field: 'stage_name' },
+    countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\``, field: 'country' },
+    employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\``, field: 'number_of_employees' },
+    eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\``, field: 'event_name' },
+    signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s`, field: 'name'}
+};
 
     const [ stageNames, countries, employeeBuckets, eventNames, signalNames ] = await Promise.all([
       fetchDistinctValues(bigquery, queries.stageNames.query, queries.stageNames.field),
