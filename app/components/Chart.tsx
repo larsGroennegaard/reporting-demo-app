@@ -42,6 +42,7 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
     );
   }
 
+  
   // Line Chart for Time Series Focus (with its own data processing)
   const processLineChartData = () => {
     if (config.chartMode === 'single_segmented') {
