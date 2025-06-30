@@ -26,7 +26,7 @@ export default function HomePage() {
   const [segmentationProperty, setSegmentationProperty] = useState('companyCountry');
   const [multiChartMetrics, setMultiChartMetrics] = useState<string[]>(['NewBiz_value', 'SQL_deals']);
   
-  // State for collapsible panels
+  // State for collapsible panels XXX
   const [isMetricsOpen, setIsMetricsOpen] = useState(false);
   const [isFiltersOpen, setIsFiltersOpen] = useState(true);
   const [isChartTableSettingsOpen, setIsChartTableSettingsOpen] = useState(true);
