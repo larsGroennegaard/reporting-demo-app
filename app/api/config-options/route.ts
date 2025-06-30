@@ -23,11 +23,11 @@ export async function GET(request: NextRequest) {
 
     // --- MODIFIED: Added queries for event names and signals ---
 const queries = {
-    stageNames: { query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\``, field: 'stage_name' },
-    countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\``, field: 'country' },
-    employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\``, field: 'number_of_employees' },
-    eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\``, field: 'event_name' },
-    signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s`, field: 'name'}
+    stageNames: { query: `SELECT DISTINCT stage_name FROM ${datasetPrefix}.stages\` WHERE stage_name IS NOT NULL`, field: 'stage_name' },
+    countries: { query: `SELECT DISTINCT properties.country FROM ${datasetPrefix}.companies\` WHERE properties.country IS NOT NULL`, field: 'country' },
+    employeeBuckets: { query: `SELECT DISTINCT properties.number_of_employees FROM ${datasetPrefix}.companies\` WHERE properties.number_of_employees IS NOT NULL`, field: 'number_of_employees' },
+    eventNames: { query: `SELECT DISTINCT event_name FROM ${datasetPrefix}.events\` WHERE event_name IS NOT NULL`, field: 'event_name' },
+    signalNames: { query: `SELECT DISTINCT s.name FROM ${datasetPrefix}.events, UNNEST(signals) as s WHERE s.name IS NOT NULL`, field: 'name'}
 };
 
     const [ stageNames, countries, employeeBuckets, eventNames, signalNames ] = await Promise.all([
