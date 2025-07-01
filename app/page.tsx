@@ -92,13 +92,12 @@ export default function HomePage() {
   const [signalOptions, setSignalOptions] = useState<OptionType[]>([]);
 
   // --- DERIVED STATE ---
-  const { currentConfig, availableMetrics, allAvailableMetrics } = useMemo(() => {
+  const { currentConfig, availableMetricsForChart, allAvailableMetrics } = useMemo(() => {
     if (reportArchetype === 'outcome_analysis') {
       const allMetrics = Object.entries(outcomeConfig.selectedMetrics).flatMap(([stage, types]) => 
         types.map(type => `${stage.replace(/\s/g, '_')}_${type}`)
       ).sort();
-      // For outcome analysis, all available metrics can be used in charts/tables
-      return { currentConfig: outcomeConfig, availableMetrics: allMetrics, allAvailableMetrics: allMetrics };
+      return { currentConfig: outcomeConfig, availableMetricsForChart: allMetrics, allAvailableMetrics: allMetrics };
     }
     
     // Engagement Analysis
@@ -109,10 +108,14 @@ export default function HomePage() {
       )
     ].sort();
     
-    // FIX: Only allow base metrics for charts and tables
-    const chartTableMetrics = [...engagementConfig.metrics.base].sort();
+    const chartTableMetrics = [
+      ...engagementConfig.metrics.base,
+      ...Object.entries(engagementConfig.metrics.influenced).flatMap(([stage, types]) => 
+        types.includes('deals') ? [`influenced_${stage.replace(/\s/g, '_')}_deals`] : []
+      )
+    ].sort();
 
-    return { currentConfig: engagementConfig, availableMetrics: chartTableMetrics, allAvailableMetrics: all };
+    return { currentConfig: engagementConfig, availableMetricsForChart: chartTableMetrics, allAvailableMetrics: all };
   }, [reportArchetype, outcomeConfig, engagementConfig]);
 
   // --- HOOKS ---
@@ -135,22 +138,22 @@ export default function HomePage() {
   useEffect(() => {
     if (reportArchetype === 'outcome_analysis') {
       const { multiChartMetrics, singleChartMetric, kpiCardConfig } = outcomeConfig;
-      const syncedMulti = multiChartMetrics.filter(metric => availableMetrics.includes(metric));
-      const syncedSingle = availableMetrics.includes(singleChartMetric) ? singleChartMetric : (availableMetrics[0] || '');
+      const syncedMulti = multiChartMetrics.filter(metric => allAvailableMetrics.includes(metric));
+      const syncedSingle = allAvailableMetrics.includes(singleChartMetric) ? singleChartMetric : (allAvailableMetrics[0] || '');
       const syncedKpis = kpiCardConfig.filter(card => allAvailableMetrics.includes(card.metric));
       if (syncedMulti.length !== multiChartMetrics.length || syncedSingle !== singleChartMetric || syncedKpis.length !== kpiCardConfig.length) {
         setOutcomeConfig(prev => ({ ...prev, multiChartMetrics: syncedMulti, singleChartMetric: syncedSingle, kpiCardConfig: syncedKpis }));
       }
     } else if (reportArchetype === 'engagement_analysis') {
       const { multiChartMetrics, singleChartMetric, kpiCardConfig } = engagementConfig;
-      const syncedMulti = multiChartMetrics.filter(metric => availableMetrics.includes(metric));
-      const syncedSingle = availableMetrics.includes(singleChartMetric) ? singleChartMetric : (availableMetrics[0] || '');
+      const syncedMulti = multiChartMetrics.filter(metric => availableMetricsForChart.includes(metric));
+      const syncedSingle = availableMetricsForChart.includes(singleChartMetric) ? singleChartMetric : (availableMetricsForChart[0] || '');
       const syncedKpis = kpiCardConfig.filter(card => allAvailableMetrics.includes(card.metric));
       if (syncedMulti.length !== multiChartMetrics.length || syncedSingle !== singleChartMetric || syncedKpis.length !== kpiCardConfig.length) {
         setEngagementConfig(prev => ({ ...prev, multiChartMetrics: syncedMulti, singleChartMetric: syncedSingle, kpiCardConfig: syncedKpis }));
       }
     }
-  }, [availableMetrics, allAvailableMetrics, reportArchetype]);
+  }, [availableMetricsForChart, allAvailableMetrics, reportArchetype]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -188,12 +191,12 @@ export default function HomePage() {
         current = current[keys[i]];
       }
       const metricGroup = keys[keys.length-1];
-      if (typeof isChecked !== 'undefined') { // Checkbox logic
+      if (typeof isChecked !== 'undefined') {
         const metricArray = current[metricGroup] || [];
         if(isChecked) current[metricGroup] = [...metricArray, value];
         else current[metricGroup] = metricArray.filter((v: string) => v !== value);
         if(keys.length > 1 && current[metricGroup].length === 0) delete current[metricGroup];
-      } else { // Direct value update
+      } else {
          current[metricGroup] = value;
       }
       return newState;
@@ -226,7 +229,6 @@ export default function HomePage() {
 
     return (
       <>
-        {/* All panels are now rendered here */}
         <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Report Focus</h3><fieldset className="flex gap-4"><label className="flex items-center"><input type="radio" name="reportFocus" value="time_series" checked={config.reportFocus === 'time_series'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Time Series</span></label><label className="flex items-center"><input type="radio" name="reportFocus" value="segmentation" checked={config.reportFocus === 'segmentation'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Segmentation</span></label></fieldset></div>
         <div><button onClick={() => setIsMetricsOpen(!isMetricsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Metrics</span><span className="text-xs">{isMetricsOpen ? '▼' : '►'}</span></button>
           {isMetricsOpen && (isOutcome ? 
@@ -257,7 +259,7 @@ export default function HomePage() {
               <button onClick={addKpiCard} className="mt-2 w-full text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500" disabled={allAvailableMetrics.length === 0}>+ Add KPI Card</button>
           </div>}
         </div>
-        <div><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetrics.length === 0}>{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>) : (<div className="mt-4 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
+        <div><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetricsForChart.length === 0}>{availableMetricsForChart.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>) : (<div className="mt-4 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
       </>
     );
   }

@@ -56,41 +56,7 @@ export async function POST(request: NextRequest) {
     if (config.reportArchetype === 'engagement_analysis') {
       const whereClause = buildEngagementWhereClause(config, 'e');
       
-      // --- KPI Query Logic (using CTEs) ---
-      const hasBaseMetrics = config.metrics.base.length > 0;
-      const hasInfluencedMetrics = Object.keys(config.metrics.influenced).length > 0;
-      let kpiQuery = '';
-
-      if (hasBaseMetrics || hasInfluencedMetrics) {
-        let ctes = [];
-        if (hasBaseMetrics) {
-          const baseSelects = config.metrics.base.map((m:string) => {
-              if(m === 'companies') return 'COUNT(DISTINCT dd_company_id) AS companies';
-              if(m === 'contacts') return 'COUNT(DISTINCT dd_contact_id) AS contacts';
-              if(m === 'events') return 'COUNT(DISTINCT dd_event_id) AS events';
-              return '';
-          }).filter(Boolean).join(', ');
-          ctes.push(`BaseMetrics AS (SELECT ${baseSelects} FROM ${eventsTable} e ${whereClause})`);
-        }
-        if (hasInfluencedMetrics) {
-          ctes.push(`InfluencedDeals AS (SELECT DISTINCT s.dd_stage_id, s.name, s.value FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause})`);
-        }
-        const finalSelects = [
-            ...config.metrics.base.map((m:string) => `bm.${m}`),
-            ...Object.entries(config.metrics.influenced).flatMap(([stage, types]) => 
-              (types as string[]).map(type => {
-                const sanitizedStage = stage.replace(/\s/g, '_');
-                if (type === 'deals') return `COUNT(DISTINCT CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.dd_stage_id END) AS influenced_${sanitizedStage}_deals`;
-                if (type === 'value') return `SUM(CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.value END) AS influenced_${sanitizedStage}_value`;
-                return '';
-              })
-            )
-        ].filter(Boolean);
-        const finalFrom = hasBaseMetrics && hasInfluencedMetrics ? 'BaseMetrics AS bm, InfluencedDeals AS id' : (hasBaseMetrics ? 'BaseMetrics AS bm' : 'InfluencedDeals AS id');
-        const finalGroupBy = hasBaseMetrics ? `GROUP BY ${config.metrics.base.map((m:string) => `bm.${m}`).join(',')}` : '';
-
-        kpiQuery = `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} FROM ${finalFrom} ${finalGroupBy}`;
-      }
+      const kpiQuery = _buildEngagementKpiQuery(config, eventsTable, whereClause);
 
       // --- Chart Query Logic ---
       let chartQuery = '';
@@ -98,7 +64,13 @@ export async function POST(request: NextRequest) {
       const chartMetrics: string[] = Array.isArray(rawChartMetrics) ? rawChartMetrics.filter((m): m is string => typeof m === 'string' && m.length > 0) : [];
       
       const needsCompanyJoin = config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
-const allInfluencedStagesInChart = Array.from(new Set(chartMetrics.filter((m: string) => m.startsWith('influenced_')).map((m: string) => m.replace('influenced_', '').replace(/_deals|_value/g, ''))));      
+      
+      const allInfluencedStagesInChart = Array.from(new Set(
+          chartMetrics
+            .filter((m: string) => m.startsWith('influenced_') && m.endsWith('_deals'))
+            .map((m: string) => m.replace('influenced_', '').replace(/_deals/g, ''))
+      ));
+      
       let chartFromClause = `FROM ${eventsTable} e`;
       if (needsCompanyJoin) chartFromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
       if (allInfluencedStagesInChart.length > 0) {
@@ -110,12 +82,10 @@ const allInfluencedStagesInChart = Array.from(new Set(chartMetrics.filter((m: st
       
       const getMetricSelect = (metric: string, isBreakdownChart: boolean = false) => {
         const alias = isBreakdownChart ? 'value' : metric.replace(/\s/g, '_');
-        if (metric.startsWith('influenced_')) {
-          const rawStage = metric.replace('influenced_', '').replace(/_deals|_value/g, '');
-          const type = metric.endsWith('_deals') ? 'deals' : 'value';
-          const sanitizedStageAlias = rawStage.replace(/\s/g, '_');
-          if (type === 'deals') return `COUNT(DISTINCT s_${sanitizedStageAlias}.dd_stage_id) AS ${alias}`;
-          return `SUM(s_${sanitizedStageAlias}.value) AS ${alias}`;
+        if (metric.startsWith('influenced_') && metric.endsWith('_deals')) {
+            const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
+            const sanitizedStageAlias = rawStage.replace(/\s/g, '_');
+            return `COUNT(DISTINCT s_${sanitizedStageAlias}.dd_stage_id) AS ${alias}`;
         }
         if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
         if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
@@ -206,4 +176,41 @@ const allInfluencedStagesInChart = Array.from(new Set(chartMetrics.filter((m: st
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return new NextResponse(JSON.stringify({ error: 'Failed to process report request', details: errorMessage }), { status: 500 });
   }
+}
+
+function _buildEngagementKpiQuery(config: any, eventsTable: string, whereClause: string): string {
+    const hasBaseMetrics = config.metrics.base.length > 0;
+    const hasInfluencedMetrics = Object.keys(config.metrics.influenced).length > 0;
+    if (!hasBaseMetrics && !hasInfluencedMetrics) return '';
+
+    let ctes = [];
+    if (hasBaseMetrics) {
+      const baseSelects = config.metrics.base.map((m:string) => {
+          if(m === 'companies') return 'COUNT(DISTINCT dd_company_id) AS companies';
+          if(m === 'contacts') return 'COUNT(DISTINCT dd_contact_id) AS contacts';
+          if(m === 'events') return 'COUNT(DISTINCT dd_event_id) AS events';
+          return '';
+      }).filter(Boolean).join(', ');
+      ctes.push(`BaseMetrics AS (SELECT ${baseSelects} FROM ${eventsTable} e ${whereClause})`);
+    }
+    if (hasInfluencedMetrics) {
+      ctes.push(`InfluencedDeals AS (SELECT DISTINCT s.dd_stage_id, s.name, s.value FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause})`);
+    }
+    
+    const finalSelects = [
+      ...(hasBaseMetrics ? config.metrics.base.map((m:string) => `bm.${m}`) : []),
+      ...Object.entries(config.metrics.influenced).flatMap(([stage, types]) => 
+        (types as string[]).map(type => {
+          const sanitizedStage = stage.replace(/\s/g, '_');
+          if (type === 'deals') return `COUNT(DISTINCT CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.dd_stage_id END) AS influenced_${sanitizedStage}_deals`;
+          if (type === 'value') return `SUM(CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.value END) AS influenced_${sanitizedStage}_value`;
+          return '';
+        })
+      )
+    ].filter(Boolean);
+
+    const finalFrom = hasBaseMetrics && hasInfluencedMetrics ? 'BaseMetrics AS bm, InfluencedDeals AS id' : (hasBaseMetrics ? 'BaseMetrics AS bm' : 'InfluencedDeals AS id');
+    const finalGroupBy = hasBaseMetrics ? `GROUP BY ${config.metrics.base.map((m:string) => `bm.${m}`).join(',')}` : '';
+
+    return `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} FROM ${finalFrom} ${finalGroupBy}`;
 }
