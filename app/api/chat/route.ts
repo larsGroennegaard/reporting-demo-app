@@ -143,9 +143,12 @@ export async function POST(request: NextRequest) {
 
         const systemPrompt = configRulesTemplate
             .replace('{{DYNAMIC_PROMPT_CONTEXT}}', dynamicContext)
-            + `\n\nUser's Question: "${query}"\n\nBased on all the rules and context provided, generate the JSON configuration object that answers this question. Your response must be only the JSON object itself, with no other text or explanation.`;
+            + `\n\nUser's Question: "${query}"`;
         
         console.log("--- Sending Prompt to Gemini ---");
+        // LOGGING ENABLED: This will now show the full prompt in your Vercel logs.
+        console.log(systemPrompt);
+        console.log("-----------------------------");
 
         const payload = {
             contents: [{ parts: [{ text: systemPrompt }] }],
@@ -179,9 +182,10 @@ export async function POST(request: NextRequest) {
             throw new Error("Failed to parse the JSON response from the AI.");
         }
 
-        if (!aiConfig || !aiConfig.reportArchetype) throw new Error("AI response is missing reportArchetype");
+        if (!aiConfig || !aiConfig.reportArchetype) {
+            throw new Error("AI response is valid JSON but is missing the required 'reportArchetype' key.");
+        }
 
-        // THE FIX: Merge the AI's partial config with the correct default object to ensure it's complete.
         let finalConfig;
         if (aiConfig.reportArchetype === 'outcome_analysis') {
             finalConfig = { ...defaultOutcomeConfig, ...aiConfig };
