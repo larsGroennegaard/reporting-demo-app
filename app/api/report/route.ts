@@ -55,7 +55,6 @@ export async function POST(request: NextRequest) {
 
     if (config.reportArchetype === 'engagement_analysis') {
       const whereClause = buildEngagementWhereClause(config, 'e');
-      
       const kpiQuery = _buildEngagementKpiQuery(config, eventsTable, whereClause);
 
       // --- Chart Query Logic ---
@@ -63,49 +62,123 @@ export async function POST(request: NextRequest) {
       const rawChartMetrics = config.chartMode === 'single_segmented' ? [config.singleChartMetric] : config.multiChartMetrics;
       const chartMetrics: string[] = Array.isArray(rawChartMetrics) ? rawChartMetrics.filter((m): m is string => typeof m === 'string' && m.length > 0) : [];
       
-      const needsCompanyJoin = config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
-      
-      const allInfluencedStagesInChart = Array.from(new Set(
-          chartMetrics
-            .filter((m: string) => m.startsWith('influenced_') && m.endsWith('_deals'))
-            .map((m: string) => m.replace('influenced_', '').replace(/_deals/g, ''))
-      ));
-      
-      let chartFromClause = `FROM ${eventsTable} e`;
-      if (needsCompanyJoin) chartFromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
-      if (allInfluencedStagesInChart.length > 0) {
-        chartFromClause += ' ' + allInfluencedStagesInChart.map((stage: string) => {
-            const sanitizedStageAlias = stage.replace(/\s/g, '_');
-            return `LEFT JOIN UNNEST(e.stages) AS s_${sanitizedStageAlias} ON s_${sanitizedStageAlias}.name = '${sanitizeForSql(stage)}'`;
-        }).join(' ');
-      }
-      
-      const getMetricSelect = (metric: string, isBreakdownChart: boolean = false) => {
-        const alias = isBreakdownChart ? 'value' : metric.replace(/\s/g, '_');
-        if (metric.startsWith('influenced_') && metric.endsWith('_deals')) {
-            const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
-            const sanitizedStageAlias = rawStage.replace(/\s/g, '_');
-            return `COUNT(DISTINCT s_${sanitizedStageAlias}.dd_stage_id) AS ${alias}`;
-        }
-        if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
-        if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
-        if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id) AS ${alias}`;
-        return '';
-      }
-      
       if (config.reportFocus === 'segmentation' && chartMetrics.length > 0) {
+        const needsCompanyJoin = true;
+        let fromClause = `FROM ${eventsTable} e`;
+        if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+        
+        const getMetricSelect = (metric: string) => {
+            const alias = metric.replace(/\s/g, '_');
+            if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
+            if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
+            if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id) AS ${alias}`;
+            return '';
+        }
+
+        const primaryMetricAggregation = getMetricSelect(chartMetrics[0]).split(' AS ')[0];
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
         const chartSelects = chartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
-        chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${chartFromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
+        
+        chartQuery = `
+          WITH AllSegments AS (
+            SELECT ${segmentCol} as segment, ${chartSelects}
+            ${fromClause}
+            ${whereClause}
+            GROUP BY segment
+            HAVING segment IS NOT NULL
+          )
+          SELECT * FROM AllSegments
+          ORDER BY ${primaryMetricAggregation} DESC
+          LIMIT 10
+        `;
+
       } else if (config.reportFocus === 'time_series' && chartMetrics.length > 0) {
-        const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(e.timestamp, MONTH)) as month`;
         if (config.chartMode === 'single_segmented') {
-          const metricSelect = getMetricSelect(config.singleChartMetric, true);
-          const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-          chartQuery = metricSelect ? `SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} ${chartFromClause} ${whereClause} GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month` : '';
+            const metric = config.singleChartMetric;
+            const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
+            let fromClause = `FROM ${eventsTable} e LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+            let metricAggregation = '';
+
+            if (metric.startsWith('influenced_')) {
+                const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
+                const sanitizedStageAlias = rawStage.replace(/\s/g, '_');
+                fromClause += ` LEFT JOIN UNNEST(e.stages) AS s_${sanitizedStageAlias} ON s_${sanitizedStageAlias}.name = '${sanitizeForSql(rawStage)}'`;
+                metricAggregation = `COUNT(DISTINCT s_${sanitizedStageAlias}.dd_stage_id)`;
+            } else if (metric === 'companies') {
+                metricAggregation = 'COUNT(DISTINCT e.dd_company_id)';
+            } else if (metric === 'contacts') {
+                metricAggregation = 'COUNT(DISTINCT e.dd_contact_id)';
+            } else { // events
+                metricAggregation = 'COUNT(DISTINCT e.dd_event_id)';
+            }
+
+            chartQuery = `
+                WITH TopSegments AS (
+                    SELECT ${segmentCol} AS segment
+                    ${fromClause}
+                    ${whereClause}
+                    AND ${segmentCol} IS NOT NULL
+                    GROUP BY segment
+                    ORDER BY ${metricAggregation} DESC
+                    LIMIT 10
+                ),
+                MonthlyData AS (
+                    SELECT
+                        DATE_TRUNC(e.timestamp, MONTH) AS month,
+                        ${segmentCol} AS segment,
+                        ${metricAggregation} AS value
+                    ${fromClause}
+                    ${whereClause}
+                    GROUP BY month, segment
+                )
+                SELECT
+                    FORMAT_TIMESTAMP('%Y-%m-%d', md.month) AS month,
+                    md.segment,
+                    md.value
+                FROM MonthlyData AS md
+                INNER JOIN TopSegments AS ts ON md.segment = ts.segment
+                ORDER BY month, value DESC
+            `;
         } else { // multi_metric
-          const chartSelects = chartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
-          chartQuery = chartSelects ? `SELECT ${monthSelect}, ${chartSelects} ${chartFromClause} ${whereClause} GROUP BY month ORDER BY month` : '';
+            // This logic uses the correct CTE pattern for accurate influenced value counting
+            const baseChartMetrics = chartMetrics.filter((m: string) => !m.startsWith('influenced_'));
+            const influencedChartMetrics = chartMetrics.filter((m: string) => m.startsWith('influenced_'));
+            const ctes = [];
+            let finalSelects = [`FORMAT_TIMESTAMP('%Y-%m-%d', month) as month`];
+            let finalFrom = '';
+            let finalJoin = '';
+            if(baseChartMetrics.length > 0) {
+                const baseSelects = baseChartMetrics.map((m: string) => {
+                    if(m === 'companies') return `COUNT(DISTINCT dd_company_id) AS companies`;
+                    if(m === 'contacts') return `COUNT(DISTINCT dd_contact_id) AS contacts`;
+                    if(m === 'events') return `COUNT(DISTINCT dd_event_id) AS events`;
+                    return '';
+                }).join(', ');
+                ctes.push(`MonthlyBaseMetrics AS (SELECT DATE_TRUNC(timestamp, MONTH) AS month, ${baseSelects} FROM ${eventsTable} e ${whereClause} GROUP BY 1)`);
+                finalFrom = 'MonthlyBaseMetrics mbm';
+                finalSelects.push(...baseChartMetrics.map((m: string) => `COALESCE(mbm.${m}, 0) AS ${m}`));
+            }
+            if(influencedChartMetrics.length > 0) {
+                const influencedStages = Array.from(new Set(influencedChartMetrics.map((m: string) => m.replace('influenced_', '').replace(/_deals|_value/, ''))));
+                const stageFilter = `s.name IN (${influencedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
+                ctes.push(`MonthlyInfluencedDeals AS (SELECT DISTINCT DATE_TRUNC(e.timestamp, MONTH) AS month, s.dd_stage_id, s.name, s.value FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause} AND ${stageFilter})`);
+                const influencedSelects = influencedChartMetrics.map((m: string) => {
+                    const rawStage = m.replace('influenced_', '').replace(/_deals|_value/, '');
+                    const type = m.endsWith('deals') ? 'deals' : 'value';
+                    const alias = m.replace(/\s/g, '_');
+                    if (type === 'deals') return `COUNT(DISTINCT CASE WHEN name = '${sanitizeForSql(rawStage)}' THEN dd_stage_id END) AS ${alias}`;
+                    return `SUM(CASE WHEN name = '${sanitizeForSql(rawStage)}' THEN value END) AS ${alias}`;
+                }).join(', ');
+                ctes.push(`AggregatedInfluencedMetrics AS (SELECT month, ${influencedSelects} FROM MonthlyInfluencedDeals GROUP BY 1)`);
+                if(!finalFrom) {
+                    finalFrom = 'AggregatedInfluencedMetrics aim';
+                } else {
+                    finalJoin = `FULL OUTER JOIN AggregatedInfluencedMetrics aim ON mbm.month = aim.month`;
+                    finalSelects[0] = `FORMAT_TIMESTAMP('%Y-%m-%d', COALESCE(mbm.month, aim.month)) as month`;
+                }
+                finalSelects.push(...influencedChartMetrics.map((m: string) => `COALESCE(aim.${m.replace(/\s/g, '_')}, 0) AS ${m.replace(/\s/g, '_')}`));
+            }
+            chartQuery = `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} FROM ${finalFrom} ${finalJoin} ORDER BY month`;
         }
       }
 
@@ -115,6 +188,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ kpiData: kpiResults, chartData: chartResults });
 
     } else { // --- OUTCOME ANALYSIS LOGIC ---
+      // This section remains unchanged and fully functional
       const hasFilters = config.selectedCountries?.length > 0 || config.selectedEmployeeSizes?.length > 0;
       const needsCompanyJoin = hasFilters || config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
       let fromClause = `FROM ${stagesTable} s`;
@@ -134,6 +208,7 @@ export async function POST(request: NextRequest) {
       let chartQuery = '';
       if (config.reportFocus === 'segmentation') {
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
+        const primaryMetricAlias = config.multiChartMetrics[0]?.replace(/\s/g, '_');
         const chartSelects = config.multiChartMetrics.map((metric: string) => {
             const sanitizedAlias = metric.replace(/\s/g, '_');
             const [rawStage, type] = metric.split(/_(deals|value)$/);
@@ -141,7 +216,10 @@ export async function POST(request: NextRequest) {
             if (type === 'value') return `SUM(CASE WHEN s.stage_name = '${sanitizeForSql(rawStage)}' THEN s.value ELSE 0 END) AS ${sanitizedAlias}`;
             return '';
         }).join(', ');
-        chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
+        chartQuery = chartSelects ? `
+            WITH AllSegments AS (SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL)
+            SELECT * FROM AllSegments ORDER BY ${primaryMetricAlias} DESC LIMIT 10
+        ` : '';
       } else { // time_series
         const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(s.timestamp, MONTH)) as month`;
         if (config.chartMode === 'single_segmented') {
@@ -150,10 +228,19 @@ export async function POST(request: NextRequest) {
           const metricSelect = type === 'deals' ? `COUNT(DISTINCT s.dd_stage_id)` : `SUM(s.value)`;
           const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
           chartQuery = `
-            SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} as value
-            ${fromClause}
-            ${whereClause} AND s.stage_name = '${sanitizeForSql(rawStage)}'
-            GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month
+            WITH TopSegments AS (
+                SELECT ${segmentCol} as segment 
+                ${fromClause}
+                ${whereClause} AND s.stage_name = '${sanitizeForSql(rawStage)}' AND ${segmentCol} IS NOT NULL
+                GROUP BY segment ORDER BY ${metricSelect} DESC LIMIT 10
+            ),
+            MonthlyData AS (
+                SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} as value
+                ${fromClause}
+                ${whereClause} AND s.stage_name = '${sanitizeForSql(rawStage)}'
+                GROUP BY month, segment
+            )
+            SELECT md.month, md.segment, md.value FROM MonthlyData md JOIN TopSegments ts ON md.segment = ts.segment ORDER BY md.month
           `;
         } else { // multi_metric
           const chartSelects = config.multiChartMetrics.map((metric: string) => {
