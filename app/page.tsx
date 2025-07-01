@@ -54,7 +54,7 @@ export default function HomePage() {
     selectedMetrics: { 'NewBiz': ['deals', 'value'], 'SQL': ['deals'] },
     selectedCountries: [],
     selectedEmployeeSizes: [],
-    chartMode: 'single_segmented',
+    chartMode: 'multiple_metrics',
     singleChartMetric: 'NewBiz_value',
     multiChartMetrics: ['NewBiz_value', 'SQL_deals'],
     segmentationProperty: 'companyCountry',
@@ -127,15 +127,31 @@ export default function HomePage() {
     fetchDropdownOptions();
   }, []);
 
+  // FIX: This new effect syncs chart selections with available metrics for the active report
+  useEffect(() => {
+    if (reportArchetype === 'outcome_analysis') {
+      const { multiChartMetrics, singleChartMetric } = outcomeConfig;
+      const syncedMulti = multiChartMetrics.filter(metric => availableMetrics.includes(metric));
+      const syncedSingle = availableMetrics.includes(singleChartMetric) ? singleChartMetric : (availableMetrics[0] || '');
+      if (syncedMulti.length !== multiChartMetrics.length || syncedSingle !== singleChartMetric) {
+        setOutcomeConfig(prev => ({ ...prev, multiChartMetrics: syncedMulti, singleChartMetric: syncedSingle }));
+      }
+    } else if (reportArchetype === 'engagement_analysis') {
+      const { multiChartMetrics, singleChartMetric } = engagementConfig;
+      const syncedMulti = multiChartMetrics.filter(metric => availableMetrics.includes(metric));
+      const syncedSingle = availableMetrics.includes(singleChartMetric) ? singleChartMetric : (availableMetrics[0] || '');
+      if (syncedMulti.length !== multiChartMetrics.length || syncedSingle !== singleChartMetric) {
+        setEngagementConfig(prev => ({ ...prev, multiChartMetrics: syncedMulti, singleChartMetric: syncedSingle }));
+      }
+    }
+  }, [availableMetrics, reportArchetype]);
+
   useEffect(() => {
     const fetchData = async () => {
       const configForApi = { reportArchetype, ...currentConfig };
-      
-      // Basic validation before fetching
       if (reportArchetype === 'outcome_analysis' && Object.keys(outcomeConfig.selectedMetrics).length === 0) {
         setIsLoading(false); setKpiData({}); setChartData([]); return;
       }
-
       setIsLoading(true);
       try {
         const response = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }, body: JSON.stringify(configForApi) });
@@ -146,20 +162,16 @@ export default function HomePage() {
       } catch (error) { console.error("Failed to fetch report data:", error); setKpiData(null); setChartData([]); }
       setIsLoading(false);
     };
-    
     const handler = setTimeout(() => { fetchData(); }, 500);
     return () => { clearTimeout(handler); };
   }, [JSON.stringify(currentConfig), reportArchetype]);
 
-  // --- UNIVERSAL HANDLER ---
+  // --- HANDLERS ---
   const handleConfigChange = (key: string, value: any) => {
-    const isOutcome = reportArchetype === 'outcome_analysis';
-    const setState = isOutcome ? setOutcomeConfig : setEngagementConfig;
-    
+    const setState = reportArchetype === 'outcome_analysis' ? setOutcomeConfig : setEngagementConfig;
     setState((prev: any) => ({ ...prev, [key]: value }));
   };
   
-  // --- SPECIFIC HANDLERS ---
   const handleMetricChange = (isOutcome: boolean, path: string, value: string | 'deals' | 'value', isChecked?: boolean) => {
     const setState = isOutcome ? setOutcomeConfig : setEngagementConfig;
     setState((prev: any) => {
@@ -170,15 +182,11 @@ export default function HomePage() {
         current = current[keys[i]];
       }
       const metricGroup = keys[keys.length-1];
-
       if (typeof isChecked !== 'undefined') { // Checkbox logic
         const metricArray = current[metricGroup] || [];
-        if(isChecked) {
-          current[metricGroup] = [...metricArray, value];
-        } else {
-          current[metricGroup] = metricArray.filter((v: string) => v !== value);
-        }
-      } else { // Direct value update for dropdowns etc.
+        if(isChecked) current[metricGroup] = [...metricArray, value];
+        else current[metricGroup] = metricArray.filter((v: string) => v !== value);
+      } else { // Direct value update
          current[metricGroup] = value;
       }
       return newState;
@@ -198,9 +206,7 @@ export default function HomePage() {
   };
   
   const updateKpiCardMetric = (idToUpdate: number, newMetric: string) => {
-    const newKpiConfig = currentConfig.kpiCardConfig.map(card => 
-      card.id === idToUpdate ? { ...card, metric: newMetric } : card
-    );
+    const newKpiConfig = currentConfig.kpiCardConfig.map(card => card.id === idToUpdate ? { ...card, metric: newMetric } : card );
     handleConfigChange('kpiCardConfig', newKpiConfig);
   };
   
@@ -213,10 +219,7 @@ export default function HomePage() {
 
     return (
       <>
-        {/* Panel: Report Focus */}
         <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Report Focus</h3><fieldset className="flex gap-4"><label className="flex items-center"><input type="radio" name="reportFocus" value="time_series" checked={config.reportFocus === 'time_series'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Time Series</span></label><label className="flex items-center"><input type="radio" name="reportFocus" value="segmentation" checked={config.reportFocus === 'segmentation'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Segmentation</span></label></fieldset></div>
-
-        {/* Panel: Metrics */}
         <div><button onClick={() => setIsMetricsOpen(!isMetricsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Metrics</span><span className="text-xs">{isMetricsOpen ? '▼' : '►'}</span></button>
           {isMetricsOpen && (isOutcome ? 
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4">{stageOptions.map(stage => (<div key={stage}><p className="font-medium text-white">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('deals')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Deals</span></label><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('value')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Value</span></label></div></div>))}</div>
@@ -224,8 +227,6 @@ export default function HomePage() {
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4"><div><p className="font-medium text-white">Base Metrics</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('companies')} onChange={(e) => setMetric('metrics.base', 'companies', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Companies</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('contacts')} onChange={(e) => setMetric('metrics.base', 'contacts', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Contacts</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('events')} onChange={(e) => setMetric('metrics.base', 'events', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Events</span></label></div></div><div><p className="font-medium text-white">Influenced Stage Metrics</p>{stageOptions.map(stage => (<div key={stage} className="pl-2 mt-1"><p className="font-medium text-gray-300">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('deals')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Touched Deals</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('value')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Touched Value</span></label></div></div>))}</div></div>
           )}
         </div>
-
-        {/* Panel: Filters */}
         <div><button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Filters</span><span className="text-xs">{isFiltersOpen ? '▼' : '►'}</span></button>
           {isFiltersOpen && (isOutcome ?
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2"><div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Company Country</label><MultiSelectFilter options={countryOptions} selected={outcomeConfig.selectedCountries} onChange={(v) => setState('selectedCountries', v)} placeholder="Select countries..."/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Number of Employees</label><MultiSelectFilter options={employeeOptions} selected={outcomeConfig.selectedEmployeeSizes} onChange={(v) => setState('selectedEmployeeSizes', v)} placeholder="Select sizes..."/></div></div>
@@ -233,8 +234,6 @@ export default function HomePage() {
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2"><div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Event Name</label><MultiSelectFilter options={eventNameOptions} selected={engagementConfig.filters.eventNames} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, eventNames: v})} placeholder="Select events..."/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Signal</label><MultiSelectFilter options={signalOptions} selected={engagementConfig.filters.signals} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, signals: v})} placeholder="Select signals..."/></div><div><label htmlFor="urlFilter" className="block text-sm font-medium text-gray-400">URL Contains</label><input type="text" id="urlFilter" value={engagementConfig.filters.url} onChange={(e) => handleConfigChange('filters', {...engagementConfig.filters, url: e.target.value})} className="mt-1 block w-full bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md p-2"/></div></div>
           )}
         </div>
-        
-        {/* Panel: KPI Card Configuration */}
         <div>
           <button onClick={() => setIsKpiConfigOpen(!isKpiConfigOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>KPI Card Configuration</span><span className="text-xs">{isKpiConfigOpen ? '▼' : '►'}</span></button>
           {isKpiConfigOpen && <div className="mt-2 space-y-2 border-l-2 border-gray-700 pl-4 pt-2">
@@ -250,8 +249,6 @@ export default function HomePage() {
               <button onClick={addKpiCard} className="mt-2 w-full text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500" disabled={availableMetrics.length === 0}>+ Add KPI Card</button>
           </div>}
         </div>
-
-        {/* Panel: Chart & Table Settings */}
         <div><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetrics.length === 0}>{availableMetrics.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div></div>) : (<div className="mt-4 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="companyCountry">Company Country</option><option value="numberOfEmployees">Number of Employees</option></select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetrics.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
       </>
     );
