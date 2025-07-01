@@ -19,6 +19,18 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
   }
 };
 
+// NEW HELPER for Funnel Length
+const getFunnelLengthClause = (funnelLength: string | undefined, touchTimestampCol: string, stageTimestampCol: string): string => {
+    if (!funnelLength || funnelLength === 'unlimited') {
+        return '';
+    }
+    const days = parseInt(funnelLength, 10);
+    if (!isNaN(days) && days > 0) {
+        return ` AND TIMESTAMP_DIFF(${stageTimestampCol}, ${touchTimestampCol}, DAY) <= ${days}`;
+    }
+    return '';
+};
+
 const _buildEngagementFilterClauses = (config: any, eventsAlias: string = 'e'): string => {
   let filterClauses = '';
   if (config.filters?.selectedChannels?.length > 0) {
@@ -169,6 +181,10 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
     let ctes = [];
     let finalSelects = [];
     let finalFromParts = new Set<string>();
+    
+    // Get funnel length clauses
+    const influencedFunnelClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
+    const attributedFunnelClause = getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp');
 
     ctes.push(`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})`);
 
@@ -192,7 +208,7 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
           return `SUM(CASE WHEN s.name = '${sanitizeForSql(stage)}' THEN s.value END) AS influenced_${sanitizedStage}_value`;
         })
       ).join(', ');
-      ctes.push(`AggregatedInfluenced AS (SELECT ${influencedSelects} FROM ${eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions))`);
+      ctes.push(`AggregatedInfluenced AS (SELECT ${influencedSelects} FROM ${eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)${influencedFunnelClause})`);
       finalSelects.push('i.*');
       finalFromParts.add('AggregatedInfluenced i');
     }
@@ -201,7 +217,7 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
             const sanitizedStage = stage.replace(/\s/g, '_');
             return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(stage)}' THEN a.weight ELSE 0 END) AS attributed_${sanitizedStage}_deals`;
         }).join(', ');
-        ctes.push(`AggregatedAttributed AS (SELECT ${attributedSelects} FROM ${attributionTable} r, UNNEST(attribution) a WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven')`);
+        ctes.push(`AggregatedAttributed AS (SELECT ${attributedSelects} FROM ${attributionTable} r, UNNEST(attribution) a WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven'${attributedFunnelClause})`);
         finalSelects.push('a.*');
         finalFromParts.add('AggregatedAttributed a');
     }
@@ -218,13 +234,13 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
     const getSegmentColumn = (prop: string, tableAlias: string = 'e') => {
         if (prop === 'companyCountry') return 'c.properties.country';
         if (prop === 'numberOfEmployees') return 'c.properties.number_of_employees';
-        // If alias is 'r' (for attribution), get channel from its nested session record
         if (tableAlias === 'r') return 'r.session.channel';
-        // Default to events table alias
         return `${tableAlias}.session.channel`;
     };
+    
+    const isTimeSeries = config.reportFocus === 'time_series';
 
-    if (config.reportFocus === 'segmentation') {
+    if (!isTimeSeries) { // Logic for Segmentation Focus
         const segmentCol = getSegmentColumn(config.segmentationProperty);
         const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
         let fromClause = `FROM ${eventsTable} e`;
@@ -267,17 +283,18 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
           LIMIT 10
         ` : '';
 
-    } else if (config.reportFocus === 'time_series') {
+    } else { // Logic for Time Series Focus
+        const influencedFunnelClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
+        const attributedFunnelClause = getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp');
+
         if (config.chartMode === 'single_segmented') {
             const metric = config.singleChartMetric;
             
             if (metric.startsWith('attributed_')) {
                 const rawStage = metric.replace('attributed_', '').replace(/_deals/g, '');
                 const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
-                // Use alias 'r' for attribution table, 'c' for companies
                 const segmentCol = getSegmentColumn(config.segmentationProperty, needsCompanyJoin ? 'c' : 'r');
 
-                // CTE to get sessions matching all UI filters
                 const filteredSessionsCTE = `FilteredSessions AS (
                     ${buildEngagementWhereClause(config, 'e').replace('WHERE', 'SELECT DISTINCT e.dd_session_id FROM ' + eventsTable + ' e WHERE')}
                 )`;
@@ -286,9 +303,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                 if(needsCompanyJoin) {
                     fromClauseForAttribution += ` LEFT JOIN ${companiesTable} c ON r.dd_company_id = c.dd_company_id`;
                 }
-
-                // Main WHERE clause now filters attribution data AND uses the session CTE
-                const whereClauseForAttribution = `WHERE a.model = 'Data-Driven' AND r.stage.name = '${sanitizeForSql(rawStage)}' AND r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)`;
+                const whereClauseForAttribution = `WHERE a.model = 'Data-Driven' AND r.stage.name = '${sanitizeForSql(rawStage)}' AND r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)${getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp')}`;
 
                 const metricAggregation = `SUM(a.weight)`;
 
@@ -317,12 +332,16 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                 const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
                 let fromClause = `FROM ${eventsTable} e`;
                 if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+                
                 let metricAggregation = '';
+                let whereExtension = '';
                 
                 if (metric.startsWith('influenced_')) {
                     const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
-                    fromClause += ` LEFT JOIN UNNEST(e.stages) AS s_${rawStage.replace(/\s/g, '_')} ON s_${rawStage.replace(/\s/g, '_')}.name = '${sanitizeForSql(rawStage)}'`;
-                    metricAggregation = `COUNT(DISTINCT s_${rawStage.replace(/\s/g, '_')}.dd_stage_id)`;
+                    const stageAlias = `s_${rawStage.replace(/\s/g, '_')}`;
+                    fromClause += ` LEFT JOIN UNNEST(e.stages) AS ${stageAlias} ON ${stageAlias}.name = '${sanitizeForSql(rawStage)}'`;
+                    metricAggregation = `COUNT(DISTINCT ${stageAlias}.dd_stage_id)`;
+                    whereExtension = getFunnelLengthClause(config.funnelLength, 'e.timestamp', `${stageAlias}.timestamp`);
                 } else {
                     if (metric === 'companies') metricAggregation = 'COUNT(DISTINCT e.dd_company_id)';
                     else if (metric === 'contacts') metricAggregation = 'COUNT(DISTINCT e.dd_contact_id)';
@@ -336,13 +355,13 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                     WITH TopSegments AS (
                         SELECT ${segmentCol} AS segment
                         ${fromClause}
-                        ${whereClause} AND ${segmentCol} IS NOT NULL
+                        ${whereClause}${whereExtension} AND ${segmentCol} IS NOT NULL
                         GROUP BY segment ORDER BY ${metricAggregation} DESC LIMIT 10
                     ),
                     MonthlyData AS (
                         SELECT DATE_TRUNC(e.timestamp, MONTH) AS month, ${segmentCol} AS segment, ${metricAggregation} AS value
                         ${fromClause}
-                        ${whereClause}
+                        ${whereClause}${whereExtension}
                         GROUP BY month, segment
                     )
                     SELECT FORMAT_TIMESTAMP('%Y-%m-%d', md.month) AS month, md.segment, md.value
@@ -374,7 +393,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
              if(influencedChartMetrics.length > 0) {
                 const influencedStages = Array.from(new Set(influencedChartMetrics.map((m: string) => m.replace('influenced_', '').replace(/_deals/g, ''))));
                 const stageFilter = `s.name IN (${influencedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
-                ctes.push(`MonthlyInfluencedDeals AS (SELECT DISTINCT DATE_TRUNC(e.timestamp, MONTH) AS month, s.dd_stage_id, s.name FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause} AND ${stageFilter})`);
+                ctes.push(`MonthlyInfluencedDeals AS (SELECT DISTINCT DATE_TRUNC(e.timestamp, MONTH) AS month, s.dd_stage_id, s.name FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause} AND ${stageFilter}${influencedFunnelClause})`);
                 const influencedSelects = influencedChartMetrics.map((m: string) => {
                     const rawStage = m.replace('influenced_', '').replace(/_deals/g, '');
                     const alias = m.replace(/\s/g, '_');
@@ -393,7 +412,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                     const alias = m.replace(/\s/g, '_');
                     return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(rawStage)}' THEN a.weight ELSE 0 END) as ${alias}`;
                  }).join(', ');
-                 ctes.push(`MonthlyAttributedMetrics AS (SELECT DATE_TRUNC(r.timestamp, MONTH) AS month, ${attributedSelects} FROM ${attributionTable} r, UNNEST(attribution) a WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven' AND ${stageFilter} GROUP BY 1)`);
+                 ctes.push(`MonthlyAttributedMetrics AS (SELECT DATE_TRUNC(r.timestamp, MONTH) AS month, ${attributedSelects} FROM ${attributionTable} r, UNNEST(attribution) a WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven' AND ${stageFilter}${attributedFunnelClause} GROUP BY 1)`);
                 fromParts.push({ alias: 'attrm', cteName: 'MonthlyAttributedMetrics' });
                 finalSelects.push(...attributedChartMetrics.map((m: string) => `COALESCE(attrm.${m.replace(/\s/g, '_')}, 0) AS ${m.replace(/\s/g, '_')}`));
             }
@@ -413,5 +432,4 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
             return '';
         }
     }
-    return '';
 }

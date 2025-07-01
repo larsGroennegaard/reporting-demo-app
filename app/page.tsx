@@ -38,6 +38,7 @@ interface EngagementReportState {
     url: string;
     selectedChannels: string[];
   };
+  funnelLength: string; // <-- ADDED
   chartMode: string;
   singleChartMetric: string;
   multiChartMetrics: string[];
@@ -70,6 +71,7 @@ export default function HomePage() {
     timePeriod: 'this_year',
     metrics: { base: ['companies', 'contacts', 'events', 'sessions'], influenced: {}, attributed: {} },
     filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
+    funnelLength: 'unlimited', // <-- ADDED
     chartMode: 'single_segmented',
     singleChartMetric: 'companies',
     multiChartMetrics: ['companies', 'contacts', 'sessions'],
@@ -286,7 +288,23 @@ export default function HomePage() {
           {isFiltersOpen && (isOutcome ?
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2"><div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Company Country</label><MultiSelectFilter options={countryOptions} selected={outcomeConfig.selectedCountries} onChange={(v) => setState('selectedCountries', v)} placeholder="Select countries..."/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Number of Employees</label><MultiSelectFilter options={employeeOptions} selected={outcomeConfig.selectedEmployeeSizes} onChange={(v) => setState('selectedEmployeeSizes', v)} placeholder="Select sizes..."/></div></div>
             :
-            <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2"><div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Channel</label><MultiSelectFilter options={channelOptions} selected={engagementConfig.filters.selectedChannels} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, selectedChannels: v})} placeholder="Select channels..."/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Event Name</label><MultiSelectFilter options={eventNameOptions} selected={engagementConfig.filters.eventNames} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, eventNames: v})} placeholder="Select events..."/></div><div><label className="block text-sm font-medium text-gray-400 mb-1">Signal</label><MultiSelectFilter options={signalOptions} selected={engagementConfig.filters.signals} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, signals: v})} placeholder="Select signals..."/></div><div><label htmlFor="urlFilter" className="block text-sm font-medium text-gray-400">URL Contains</label><input type="text" id="urlFilter" value={engagementConfig.filters.url} onChange={(e) => handleConfigChange('filters', {...engagementConfig.filters, url: e.target.value})} className="mt-1 block w-full bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md p-2"/></div></div>
+            <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div>
+                {/* NEW FILTER ADDED HERE */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-400 mb-1">Funnel Length</label>
+                  <select value={engagementConfig.funnelLength} onChange={(e) => handleConfigChange('funnelLength', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
+                    <option value="unlimited">Unlimited</option>
+                    <option value="30">30 days</option>
+                    <option value="60">60 days</option>
+                    <option value="90">90 days</option>
+                  </select>
+                </div>
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Channel</label><MultiSelectFilter options={channelOptions} selected={engagementConfig.filters.selectedChannels} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, selectedChannels: v})} placeholder="Select channels..."/></div>
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Event Name</label><MultiSelectFilter options={eventNameOptions} selected={engagementConfig.filters.eventNames} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, eventNames: v})} placeholder="Select events..."/></div>
+                <div><label className="block text-sm font-medium text-gray-400 mb-1">Signal</label><MultiSelectFilter options={signalOptions} selected={engagementConfig.filters.signals} onChange={(v) => handleConfigChange('filters', {...engagementConfig.filters, signals: v})} placeholder="Select signals..."/></div>
+                <div><label htmlFor="urlFilter" className="block text-sm font-medium text-gray-400">URL Contains</label><input type="text" id="urlFilter" value={engagementConfig.filters.url} onChange={(e) => handleConfigChange('filters', {...engagementConfig.filters, url: e.target.value})} className="mt-1 block w-full bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md p-2"/></div>
+            </div>
           )}
         </div>
         <div>
