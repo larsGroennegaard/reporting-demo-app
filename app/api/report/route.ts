@@ -21,6 +21,9 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
 
 const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
   let whereClauses = `WHERE 1=1 ${getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`)}`;
+  if (config.filters?.selectedChannels?.length > 0) {
+    whereClauses += ` AND ${eventsAlias}.session.channel IN (${config.filters.selectedChannels.map((c: string) => `'${sanitizeForSql(c)}'`).join(',')})`;
+  }
   if (config.filters?.eventNames?.length > 0) {
     whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
   }
@@ -55,7 +58,6 @@ export async function POST(request: NextRequest) {
 
     if (config.reportArchetype === 'engagement_analysis') {
       const whereClause = buildEngagementWhereClause(config, 'e');
-      
       const kpiQuery = _buildEngagementKpiQuery(config, eventsTable, whereClause);
 
       // --- Chart Query Logic ---
@@ -63,20 +65,12 @@ export async function POST(request: NextRequest) {
       const rawChartMetrics = config.chartMode === 'single_segmented' ? [config.singleChartMetric] : config.multiChartMetrics;
       const chartMetrics: string[] = Array.isArray(rawChartMetrics) ? rawChartMetrics.filter((m): m is string => typeof m === 'string' && m.length > 0) : [];
       
-      const getMetricSelect = (metric: string, isBreakdownChart: boolean = false) => {
-        const alias = isBreakdownChart ? 'value' : metric.replace(/\s/g, '_');
-        if (metric.startsWith('influenced_') && metric.endsWith('_deals')) {
-            const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
-            const sanitizedStageAlias = rawStage.replace(/\s/g, '_');
-            return `COUNT(DISTINCT s_${sanitizedStageAlias}.dd_stage_id) AS ${alias}`;
-        }
-        if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
-        if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
-        if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id) AS ${alias}`;
-        if(metric === 'sessions') return `COUNT(DISTINCT e.dd_session_id) AS ${alias}`;
-        return '';
+      const getSegmentColumn = (prop: string) => {
+          if (prop === 'companyCountry') return 'c.properties.country';
+          if (prop === 'numberOfEmployees') return 'c.properties.number_of_employees';
+          return 'e.session.channel';
       }
-
+      
       const getMetricAggregation = (metric: string) => {
         if (metric.startsWith('influenced_') && metric.endsWith('_deals')) {
             const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
@@ -91,13 +85,13 @@ export async function POST(request: NextRequest) {
       }
       
       if (config.reportFocus === 'segmentation' && chartMetrics.length > 0) {
-        const needsCompanyJoin = true;
+        const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
         let fromClause = `FROM ${eventsTable} e`;
         if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
         
         const primaryMetricAggregation = getMetricAggregation(chartMetrics[0]);
-        const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        const chartSelects = chartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
+        const segmentCol = getSegmentColumn(config.segmentationProperty);
+        const chartSelects = chartMetrics.map((m: string) => getMetricAggregation(m) + ' AS ' + m.replace(/\s/g, '_')).filter(Boolean).join(', ');
         
         chartQuery = `
           WITH AllSegments AS (
@@ -115,8 +109,11 @@ export async function POST(request: NextRequest) {
       } else if (config.reportFocus === 'time_series' && chartMetrics.length > 0) {
         if (config.chartMode === 'single_segmented') {
             const metric = config.singleChartMetric;
-            const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-            let fromClause = `FROM ${eventsTable} e LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+            const segmentCol = getSegmentColumn(config.segmentationProperty);
+            const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
+            let fromClause = `FROM ${eventsTable} e`;
+            if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+            
             let metricAggregation = getMetricAggregation(metric);
 
             if (metric.startsWith('influenced_')) {
