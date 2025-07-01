@@ -340,9 +340,8 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
              const attributedChartMetrics = chartMetrics.filter((m: string) => m.startsWith('attributed_'));
              const ctes = [];
              let finalSelects = [`FORMAT_TIMESTAMP('%Y-%m-%d', month) as month`];
-             let finalFrom = '';
-             let finalJoin = new Set<string>();
-
+             let fromParts: { alias: string, cteName: string }[] = [];
+             
              if(baseChartMetrics.length > 0) {
                  const baseSelects = baseChartMetrics.map((m: string) => {
                      if (m === 'companies') return `COUNT(DISTINCT dd_company_id) AS companies`;
@@ -352,7 +351,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                      return '';
                  }).join(', ');
                  ctes.push(`MonthlyBaseMetrics AS (SELECT DATE_TRUNC(timestamp, MONTH) AS month, ${baseSelects} FROM ${eventsTable} e ${whereClause} GROUP BY 1)`);
-                 finalFrom = 'MonthlyBaseMetrics mbm';
+                 fromParts.push({ alias: 'mbm', cteName: 'MonthlyBaseMetrics' });
                  finalSelects.push(...baseChartMetrics.map((m: string) => `COALESCE(mbm.${m}, 0) AS ${m}`));
              }
              if(influencedChartMetrics.length > 0) {
@@ -365,11 +364,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                     return `COUNT(DISTINCT CASE WHEN name = '${sanitizeForSql(rawStage)}' THEN dd_stage_id END) AS ${alias}`;
                 }).join(', ');
                 ctes.push(`AggregatedInfluencedMetrics AS (SELECT month, ${influencedSelects} FROM MonthlyInfluencedDeals GROUP BY 1)`);
-                if (!finalFrom) {
-                    finalFrom = 'AggregatedInfluencedMetrics aim';
-                } else {
-                    finalJoin.add(`FULL OUTER JOIN AggregatedInfluencedMetrics aim ON mbm.month = aim.month`);
-                }
+                fromParts.push({ alias: 'aim', cteName: 'AggregatedInfluencedMetrics' });
                 finalSelects.push(...influencedChartMetrics.map((m: string) => `COALESCE(aim.${m.replace(/\s/g, '_')}, 0) AS ${m.replace(/\s/g, '_')}`));
              }
             if(attributedChartMetrics.length > 0) {
@@ -382,19 +377,23 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
                     return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(rawStage)}' THEN a.weight ELSE 0 END) as ${alias}`;
                  }).join(', ');
                  ctes.push(`MonthlyAttributedMetrics AS (SELECT DATE_TRUNC(r.timestamp, MONTH) AS month, ${attributedSelects} FROM ${attributionTable} r, UNNEST(attribution) a WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven' AND ${stageFilter} GROUP BY 1)`);
-                if (!finalFrom) {
-                    finalFrom = 'MonthlyAttributedMetrics attrm';
-                } else {
-                    finalJoin.add(`FULL OUTER JOIN MonthlyAttributedMetrics attrm ON ${finalFrom.split(' ')[0]}.month = attrm.month`);
-                }
+                fromParts.push({ alias: 'attrm', cteName: 'MonthlyAttributedMetrics' });
                 finalSelects.push(...attributedChartMetrics.map((m: string) => `COALESCE(attrm.${m.replace(/\s/g, '_')}, 0) AS ${m.replace(/\s/g, '_')}`));
             }
-            if(finalJoin.size > 0) {
-                const fromAliases = [finalFrom.split(' ')[0]];
-                finalJoin.forEach(j => fromAliases.push(j.split(' ')[3].split('.')[0]));
-                finalSelects[0] = `FORMAT_TIMESTAMP('%Y-%m-%d', COALESCE(${fromAliases.map(a => `${a}.month`).join(', ')})) as month`;
+
+            if (fromParts.length > 0) {
+                let finalFrom = `${fromParts[0].cteName} ${fromParts[0].alias}`;
+                let finalJoins = fromParts.slice(1).map((part, i) => {
+                    const prevPart = fromParts[i];
+                    return `FULL OUTER JOIN ${part.cteName} ${part.alias} ON ${prevPart.alias}.month = ${part.alias}.month`;
+                }).join(' ');
+
+                const coalesceColumns = fromParts.map(p => `${p.alias}.month`).join(', ');
+                finalSelects[0] = `FORMAT_TIMESTAMP('%Y-%m-%d', COALESCE(${coalesceColumns})) as month`;
+                
+                return `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} FROM ${finalFrom} ${finalJoins} ORDER BY month`;
             }
-             return ctes.length > 0 ? `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} FROM ${finalFrom} ${Array.from(finalJoin).join(' ')} ORDER BY month` : '';
+            return '';
         }
     }
     return '';
