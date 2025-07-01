@@ -7,8 +7,14 @@ import Chart from './components/Chart';
 import Table from './components/Table';
 import { MultiSelectFilter, OptionType } from './components/MultiSelectFilter';
 import { X } from 'lucide-react';
+import ChatInterface from './components/ChatInterface'; // <-- IMPORTED
 
 // --- State Shape Interfaces ---
+type Message = {
+  sender: 'user' | 'bot' | 'loading';
+  text: string;
+};
+
 interface KpiCardConfig { id: number; metric: string; }
 
 interface OutcomeReportState {
@@ -38,7 +44,7 @@ interface EngagementReportState {
     url: string;
     selectedChannels: string[];
   };
-  funnelLength: string; // <-- ADDED
+  funnelLength: string;
   chartMode: string;
   singleChartMetric: string;
   multiChartMetrics: string[];
@@ -71,7 +77,7 @@ export default function HomePage() {
     timePeriod: 'this_year',
     metrics: { base: ['companies', 'contacts', 'events', 'sessions'], influenced: {}, attributed: {} },
     filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
-    funnelLength: 'unlimited', // <-- ADDED
+    funnelLength: 'unlimited',
     chartMode: 'single_segmented',
     singleChartMetric: 'companies',
     multiChartMetrics: ['companies', 'contacts', 'sessions'],
@@ -79,6 +85,14 @@ export default function HomePage() {
     kpiCardConfig: [],
   });
   
+  // --- CHAT-RELATED STATE ---
+  const [activeView, setActiveView] = useState<'prompt' | 'configure'>('prompt');
+  const [messages, setMessages] = useState<Message[]>([
+      { sender: 'bot', text: "Hello! Describe the report you'd like to see." }
+  ]);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [currentQuery, setCurrentQuery] = useState('');
+
   // UI and Data Fetching State
   const [isMetricsOpen, setIsMetricsOpen] = useState(true);
   const [isFiltersOpen, setIsFiltersOpen] = useState(true);
@@ -86,7 +100,7 @@ export default function HomePage() {
   const [isChartTableSettingsOpen, setIsChartTableSettingsOpen] = useState(true);
   const [kpiData, setKpiData] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   // Dropdown options
   const [stageOptions, setStageOptions] = useState<string[]>([]);
@@ -114,7 +128,7 @@ export default function HomePage() {
         types.map(type => `influenced_${sanitize(stage)}_${type}`)
       ),
       ...Object.entries(engagementConfig.metrics.attributed).flatMap(([stage, types]) => 
-        types.map(type => `attributed_${sanitize(stage)}_${type}`)
+        types.includes('deals') ? [`attributed_${sanitize(stage)}_deals`] : []
       ),
     ].sort();
     
@@ -177,19 +191,74 @@ export default function HomePage() {
       }
       setIsLoading(true);
       try {
-        const response = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }, body: JSON.stringify(configForApi) });
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
-        setKpiData(data.kpiData);
-        setChartData(data.chartData);
-      } catch (error) { console.error("Failed to fetch report data:", error); setKpiData(null); setChartData([]); }
+        const reportResponse = await fetch('/api/report', { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }, body: JSON.stringify(configForApi) });
+        if (!reportResponse.ok) throw new Error('Network response was not ok');
+        const reportData = await reportResponse.json();
+        setKpiData(reportData.kpiData);
+        setChartData(reportData.chartData);
+
+        // --- NEW: Second API call to get natural language summary ---
+        if (currentQuery) {
+            const chatResponse = await fetch('/api/chat', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query: currentQuery, kpiData: reportData.kpiData, chartData: reportData.chartData })
+            });
+            const chatData = await chatResponse.json();
+            setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: chatData.answer } : m));
+            setCurrentQuery(''); // Reset query after getting summary
+        }
+
+      } catch (error) { 
+        console.error("Failed to fetch report data:", error); 
+        setKpiData(null); 
+        setChartData([]);
+        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: 'Sorry, I encountered an error generating the report.' } : m));
+      }
       setIsLoading(false);
+      setIsGenerating(false);
     };
-    const handler = setTimeout(() => { fetchData(); }, 500);
-    return () => { clearTimeout(handler); };
-  }, [JSON.stringify(currentConfig), reportArchetype]);
+    
+    // Only fetch if not generating from a prompt OR if a config has been set by the prompt
+    if (!isGenerating || currentQuery) {
+        const handler = setTimeout(() => { fetchData(); }, 500);
+        return () => { clearTimeout(handler); };
+    }
+  }, [JSON.stringify(currentConfig), reportArchetype, currentQuery]);
 
   // --- HANDLERS ---
+  const handleQuerySubmit = async (query: string) => {
+    setIsGenerating(true);
+    setMessages(prev => [...prev, { sender: 'user', text: query }, { sender: 'loading', text: 'Generating configuration...' }]);
+    try {
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query })
+        });
+        const data = await response.json();
+
+        if (data.error) throw new Error(data.error);
+
+        // Update the correct config state based on the AI's response
+        if (data.config.reportArchetype === 'outcome_analysis') {
+            setOutcomeConfig(data.config);
+        } else {
+            setEngagementConfig(data.config);
+        }
+        setReportArchetype(data.config.reportArchetype);
+        setCurrentQuery(query); // Set the query to trigger the second API call in useEffect
+        setActiveView('configure'); // Switch to the configure view
+        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Configuration received. Fetching report data...' } : m));
+
+    } catch (error) {
+        console.error("Failed to generate config from prompt:", error);
+        setIsGenerating(false);
+        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: 'Sorry, I had trouble understanding that. Could you try rephrasing?' } : m));
+    }
+  };
+
+
   const handleConfigChange = (key: string, value: any) => {
     const setState = reportArchetype === 'outcome_analysis' ? setOutcomeConfig : setEngagementConfig;
     setState((prev: any) => ({ ...prev, [key]: value }));
@@ -235,7 +304,7 @@ export default function HomePage() {
   };
   
   // --- RENDER FUNCTION ---
-  const renderPanels = () => {
+  const renderConfigurationPanels = () => {
     const isOutcome = reportArchetype === 'outcome_analysis';
     const config = isOutcome ? outcomeConfig : engagementConfig;
     const setState = (key: string, value: any) => handleConfigChange(key, value);
@@ -255,7 +324,8 @@ export default function HomePage() {
     );
 
     return (
-      <>
+      <div className="p-6 space-y-6">
+        <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Report Type</h3><fieldset className="flex gap-4"><label className="flex items-center"><input type="radio" name="reportArchetype" value="outcome_analysis" checked={reportArchetype === 'outcome_analysis'} onChange={(e) => setReportArchetype(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300" /><span className="ml-2">Outcome Analysis</span></label><label className="flex items-center"><input type="radio" name="reportArchetype" value="engagement_analysis" checked={reportArchetype === 'engagement_analysis'} onChange={(e) => setReportArchetype(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300" /><span className="ml-2">Engagement Analysis</span></label></fieldset></div>
         <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Report Focus</h3><fieldset className="flex gap-4"><label className="flex items-center"><input type="radio" name="reportFocus" value="time_series" checked={config.reportFocus === 'time_series'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Time Series</span></label><label className="flex items-center"><input type="radio" name="reportFocus" value="segmentation" checked={config.reportFocus === 'segmentation'} onChange={(e) => setState('reportFocus', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Segmentation</span></label></fieldset></div>
         <div><button onClick={() => setIsMetricsOpen(!isMetricsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Metrics</span><span className="text-xs">{isMetricsOpen ? '▼' : '►'}</span></button>
           {isMetricsOpen && (isOutcome ? 
@@ -290,7 +360,6 @@ export default function HomePage() {
             :
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label><select value={config.timePeriod} onChange={(e) => setState('timePeriod', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"><option value="this_year">This Year</option><option value="last_quarter">Last Quarter</option><option value="last_month">Last Month</option></select></div>
-                {/* NEW FILTER ADDED HERE */}
                 <div>
                   <label className="block text-sm font-medium text-gray-400 mb-1">Funnel Length</label>
                   <select value={engagementConfig.funnelLength} onChange={(e) => handleConfigChange('funnelLength', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">
@@ -323,18 +392,26 @@ export default function HomePage() {
           </div>}
         </div>
         <div><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetricsForChart.length === 0}>{availableMetricsForChart.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div></div>) : (<div className="mt-4 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
-      </>
+      </div>
     );
   }
 
   // --- MAIN RENDER ---
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
-      <div className="w-1/3 max-w-sm p-6 bg-gray-800 shadow-lg overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4 text-white">Report Configuration</h2>
-        <div className="space-y-6">
-          <div><h3 className="text-lg font-semibold mb-2 text-gray-100">Report Type</h3><fieldset className="flex gap-4"><label className="flex items-center"><input type="radio" name="reportArchetype" value="outcome_analysis" checked={reportArchetype === 'outcome_analysis'} onChange={(e) => setReportArchetype(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300" /><span className="ml-2">Outcome Analysis</span></label><label className="flex items-center"><input type="radio" name="reportArchetype" value="engagement_analysis" checked={reportArchetype === 'engagement_analysis'} onChange={(e) => setReportArchetype(e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300" /><span className="ml-2">Engagement Analysis</span></label></fieldset></div>
-          {renderPanels()}
+      <div className="w-1/3 max-w-sm flex flex-col bg-gray-800 shadow-lg">
+        <div className="p-4 border-b border-gray-700">
+            <div className="flex bg-gray-700 rounded-md p-1">
+                <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
+                <button onClick={() => setActiveView('configure')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'configure' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Configure</button>
+            </div>
+        </div>
+        <div className="flex-grow overflow-y-auto">
+            {activeView === 'prompt' ? (
+                <ChatInterface onQuerySubmit={handleQuerySubmit} messages={messages} isGenerating={isGenerating} />
+            ) : (
+                renderConfigurationPanels()
+            )}
         </div>
       </div>
       <div className="flex-1 p-8 overflow-y-auto">
