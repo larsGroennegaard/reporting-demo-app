@@ -19,21 +19,29 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
   }
 };
 
-const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
-  let whereClauses = `WHERE 1=1 ${getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`)}`;
+// NEW, REFACTORED HELPER FUNCTION for generating filter clauses
+const _buildEngagementFilterClauses = (config: any, eventsAlias: string = 'e'): string => {
+  let filterClauses = '';
   if (config.filters?.selectedChannels?.length > 0) {
-    whereClauses += ` AND ${eventsAlias}.session.channel IN (${config.filters.selectedChannels.map((c: string) => `'${sanitizeForSql(c)}'`).join(',')})`;
+    filterClauses += ` AND ${eventsAlias}.session.channel IN (${config.filters.selectedChannels.map((c: string) => `'${sanitizeForSql(c)}'`).join(',')})`;
   }
   if (config.filters?.eventNames?.length > 0) {
-    whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
+    filterClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
   }
   if (config.filters?.signals?.length > 0) {
-    whereClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
+    filterClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(${eventsAlias}.signals) s WHERE s.name IN (${config.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
   }
   if (config.filters?.url) {
-    whereClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${sanitizeForSql(config.filters.url)}%'`;
+    filterClauses += ` AND ${eventsAlias}.event.url_clean LIKE '%${sanitizeForSql(config.filters.url)}%'`;
   }
-  return whereClauses;
+  return filterClauses;
+};
+
+// MODIFIED to use the new helper function
+const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
+  const timeClause = getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
+  const filterClauses = _buildEngagementFilterClauses(config, eventsAlias);
+  return `WHERE 1=1${timeClause}${filterClauses}`;
 };
 
 
@@ -264,16 +272,21 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
             
             if (metric.startsWith('attributed_')) {
                 const rawStage = metric.replace('attributed_', '').replace(/_deals/g, '');
-                const segmentCol = getSegmentColumn(config.segmentationProperty, 'r');
+                // Use 'e' as alias for segment column source because we now join to events table
+                const segmentCol = getSegmentColumn(config.segmentationProperty, 'e');
                 const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
-
-                let fromClauseForAttribution = `FROM ${attributionTable} r, UNNEST(r.attribution) a`;
+                
+                // FROM clause now joins events (e) so we can apply all filters
+                let fromClauseForAttribution = `FROM ${attributionTable} r INNER JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id LEFT JOIN UNNEST(r.attribution) a`;
                 if(needsCompanyJoin) {
-                    fromClauseForAttribution += ` JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+                    fromClauseForAttribution += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
                 }
 
+                // THE FIX IS HERE: Build a complete WHERE clause using the new helper
                 const timeFilter = getTimePeriodClause(config.timePeriod, 'r.timestamp');
-                const whereClauseForAttribution = `WHERE 1=1 ${timeFilter} AND r.stage.name = '${sanitizeForSql(rawStage)}' AND a.model = 'Data-Driven'`;
+                const engagementFilters = _buildEngagementFilterClauses(config, 'e');
+                const whereClauseForAttribution = `WHERE 1=1 ${timeFilter} AND r.stage.name = '${sanitizeForSql(rawStage)}' AND a.model = 'Data-Driven'${engagementFilters}`;
+
                 const metricAggregation = `SUM(a.weight)`;
 
                 return `
