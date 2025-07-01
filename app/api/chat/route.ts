@@ -79,9 +79,17 @@ export async function POST(request: NextRequest) {
         body: JSON.stringify({ contents: [{ parts: [{ text: summaryPrompt }] }] })
       });
       const result = await response.json();
+      
+      // Defensive check and logging for summary generation
+      if (!result.candidates || result.candidates.length === 0) {
+          console.error("Gemini summary response is missing candidates. Full response:", JSON.stringify(result, null, 2));
+          throw new Error("Invalid response structure from Gemini API for summary.");
+      }
+
       const answer = result.candidates[0]?.content?.parts[0]?.text || "I was unable to generate a summary for this report.";
       console.log("Successfully generated summary:", answer);
       return NextResponse.json({ answer });
+
     } catch (error) {
       console.error("Error calling Gemini API for summary:", error);
       return new NextResponse(JSON.stringify({ error: 'Failed to generate summary.' }), { status: 500 });
@@ -106,32 +114,42 @@ export async function POST(request: NextRequest) {
 
         const systemPrompt = configRulesTemplate
             .replace('{{DYNAMIC_PROMPT_CONTEXT}}', dynamicContext)
-            + `\n\nUser's Question: "${query}"\n\nNow, generate the JSON configuration object that answers this question.`;
+            + `\n\nUser's Question: "${query}"\n\nBased on all the rules and context provided, generate the JSON configuration object that answers this question. Your response must be only the JSON object itself, with no other text or explanation.`;
         
         console.log("--- Sending Prompt to Gemini ---");
-        // console.log(systemPrompt); // Uncomment for very detailed debugging
-        console.log("-----------------------------");
+
+        const payload = {
+            contents: [{ parts: [{ text: systemPrompt }] }],
+            generationConfig: {
+                responseMimeType: "application/json",
+            }
+        };
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
+            body: JSON.stringify(payload)
         });
 
         const result = await response.json();
         
+        // ADDED: Log the entire Gemini response object for debugging
+        console.log("Full response object from Gemini:", JSON.stringify(result, null, 2));
+
+        // ADDED: Defensive check for the candidates array
+        if (!result.candidates || result.candidates.length === 0) {
+            throw new Error("Invalid response structure from Gemini API. No candidates found.");
+        }
+        
         let config;
         const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
-        console.log("Raw response from Gemini:", rawText);
-
+        
         try {
-            // FIX: Escaped the backticks in the regular expressions
-            const jsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
-            config = JSON.parse(jsonText);
+            config = JSON.parse(rawText);
             console.log("Successfully parsed JSON config.");
         } catch (e) {
-            console.error("Failed to parse JSON from AI:", e);
-            throw new Error("AI returned malformed JSON");
+            console.error("This should not happen, but failed to parse guaranteed JSON:", e);
+            throw new Error("Failed to parse the JSON response from the AI.");
         }
 
         if (!config) throw new Error("AI returned an empty config");
