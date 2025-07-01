@@ -43,7 +43,6 @@ export async function POST(request: NextRequest) {
       Chart/Table Data Summary:
       The chart/table contains ${chartData?.length || 0} rows of data.
       ${chartData?.length > 0 ? `The primary segments are: ${
-        // FIX: Changed from spread operator to Array.from() for compatibility
         Array.from(new Set(chartData.map((d: any) => d.segment || d.month)))
         .slice(0, 5).join(', ')}` : ''}
       
@@ -69,27 +68,15 @@ export async function POST(request: NextRequest) {
   // --- Step 1: Generate Report Configuration ---
   // If kpiData is not present, we are in the first step.
   else {
-    const [configRules, businessRules] = await Promise.all([
-        readAIContextFile('config_rules.md'),
-        readAIContextFile('_rules.txt')
-    ]);
+    const configRules = await readAIContextFile('config_rules.md');
 
+    // REFINED PROMPT: This prompt is now simpler and relies entirely on the config_rules.md file for context.
     const systemPrompt = `
       ${configRules}
 
-      ---
-      ## Additional Business Logic Context
-      Here are some additional business rules from the '_rules.txt' file to help resolve ambiguity.
-      - "Influenced" or "touched" value/deals are found by unnesting the 'stages' array in the 'events' table.
-      - "Attributed" value/deals are found by unnesting the 'attribution' array in the 'attribution' table.
-      - A "session" or "touch" is a single period of user interaction identified by 'dd_session_id'.
-      - An "event" is a single action within a session, identified by 'dd_event_id'.
-      - Always use the 'data-driven' model for attribution unless specified otherwise.
-      ---
-
       User's Question: "${query}"
 
-      Now, generate the JSON configuration object that answers this question.
+      Now, generate the JSON configuration object that answers this question based on the rules and schemas provided above.
     `;
 
     try {
@@ -101,13 +88,11 @@ export async function POST(request: NextRequest) {
 
       const result = await response.json();
       
-      // Clean the response from the LLM to get only the JSON part
       const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
       const jsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
 
       const config = JSON.parse(jsonText);
       
-      // Ensure KPI cards have unique IDs
       if (config.kpiCardConfig && Array.isArray(config.kpiCardConfig)) {
         config.kpiCardConfig.forEach((card: any, index: number) => {
             card.id = Date.now() + index;
