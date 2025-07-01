@@ -68,7 +68,8 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({ kpiData: kpiResults, chartData: chartResults });
 
-    } else { 
+    } else { // --- OUTCOME ANALYSIS LOGIC ---
+      
       const hasFilters = config.selectedCountries?.length > 0 || config.selectedEmployeeSizes?.length > 0;
       const needsCompanyJoin = hasFilters || config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
       
@@ -208,69 +209,81 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
     const chartMetrics: string[] = Array.isArray(rawChartMetrics) ? rawChartMetrics.filter((m): m is string => typeof m === 'string' && m.length > 0) : [];
     if (chartMetrics.length === 0) return '';
 
-    const getSegmentColumn = (prop: string) => {
+    const getSegmentColumn = (prop: string, tableAlias: string = 'e') => {
         if (prop === 'companyCountry') return 'c.properties.country';
         if (prop === 'numberOfEmployees') return 'c.properties.number_of_employees';
-        return 'e.session.channel';
+        return `${tableAlias}.session.channel`;
     };
 
     if (config.reportFocus === 'segmentation') {
         const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
         let fromClause = `FROM ${eventsTable} e`;
         if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+        
         const getMetricAggregation = (metric: string) => {
+            if (metric.startsWith('attributed_')) return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(metric.replace('attributed_', '').replace(/_/g, ' '))}' THEN a.weight ELSE 0 END)`;
             if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id)`;
             if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id)`;
             if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id)`;
             if(metric === 'sessions') return `COUNT(DISTINCT e.dd_session_id)`;
-            if (metric.startsWith('attributed_')) return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(metric.replace('attributed_', '').replace(/_/g, ' '))}' THEN a.weight ELSE 0 END)`;
             return 'NULL';
         }
         
         const hasAttributed = chartMetrics.some(m => m.startsWith('attributed_'));
+        let finalWhere = whereClause;
+
         if (hasAttributed) {
-            const ctes = [`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})`];
             fromClause = `FROM ${attributionTable} r JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id JOIN UNNEST(r.attribution) a`;
             if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
-            whereClause = `WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven'`;
+            finalWhere = `WHERE r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven'`;
         }
 
         const primaryMetricAggregation = getMetricAggregation(chartMetrics[0]);
         const segmentCol = getSegmentColumn(config.segmentationProperty);
         const chartSelects = chartMetrics.map((m: string) => getMetricAggregation(m) + ' AS ' + m.replace(/\s/g, '_')).filter(m => !m.includes('NULL')).join(', ');
         
+        const sessionsCte = hasAttributed ? `WITH FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})` : '';
+
         return chartSelects ? `
-          WITH AllSegments AS (
+          ${sessionsCte}
+          , AllSegments AS (
             SELECT ${segmentCol} as segment, ${chartSelects}
             ${fromClause}
-            ${whereClause}
+            ${finalWhere}
             GROUP BY segment
             HAVING segment IS NOT NULL
           )
           SELECT * FROM AllSegments
-          ORDER BY ${primaryMetricAggregation} DESC
+          ORDER BY ${primaryMetricAggregation.split(' AS ')[0]} DESC
           LIMIT 10
         ` : '';
 
     } else if (config.reportFocus === 'time_series') {
         if (config.chartMode === 'single_segmented') {
             const metric = config.singleChartMetric;
-            const segmentCol = getSegmentColumn(config.segmentationProperty);
+            const segmentCol = getSegmentColumn(config.segmentationProperty, metric.startsWith('attributed_') ? 'r' : 'e');
             const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
-
             let fromClause = `FROM ${eventsTable} e`;
             if (needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
-
             let metricAggregation = '';
+            let baseWhere = whereClause;
+
             if (metric.startsWith('influenced_')) {
                 const rawStage = metric.replace('influenced_', '').replace(/_deals/g, '');
                 fromClause += ` LEFT JOIN UNNEST(e.stages) AS s_${rawStage.replace(/\s/g, '_')} ON s_${rawStage.replace(/\s/g, '_')}.name = '${sanitizeForSql(rawStage)}'`;
                 metricAggregation = `COUNT(DISTINCT s_${rawStage.replace(/\s/g, '_')}.dd_stage_id)`;
             } else if (metric.startsWith('attributed_')) {
                 const rawStage = metric.replace('attributed_', '').replace(/_deals/g, '');
-                fromClause = `FROM ${attributionTable} r JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id`;
-                if(needsCompanyJoin) fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
-                metricAggregation = `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(rawStage)}' THEN r.attribution[OFFSET(0)].weight ELSE 0 END)`;
+                fromClause = `FROM ${attributionTable} r, UNNEST(r.attribution) a`;
+                if(needsCompanyJoin) {
+                    fromClause += ` JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+                } else {
+                     fromClause += ` JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id`;
+                }
+                baseWhere = `WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)`;
+                whereClause = ` AND r.stage.name = '${sanitizeForSql(rawStage)}' AND a.model = 'Data-Driven'`;
+                metricAggregation = `SUM(a.weight)`;
+
             } else {
                 if (metric === 'companies') metricAggregation = 'COUNT(DISTINCT e.dd_company_id)';
                 else if (metric === 'contacts') metricAggregation = 'COUNT(DISTINCT e.dd_contact_id)';
@@ -279,30 +292,24 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
             }
             
             if (!metricAggregation) return '';
-
+            
+            const sessionsCte = metric.startsWith('attributed_') ? `FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${buildEngagementWhereClause(config, 'e')}),` : '';
+            
             return `
-                WITH TopSegments AS (
+                WITH ${sessionsCte}
+                TopSegments AS (
                     SELECT ${segmentCol} AS segment
                     ${fromClause}
-                    ${whereClause}
-                    AND ${segmentCol} IS NOT NULL
-                    GROUP BY segment
-                    ORDER BY ${metricAggregation} DESC
-                    LIMIT 10
+                    ${baseWhere} ${metric.startsWith('attributed_') ? whereClause : ''} AND ${segmentCol} IS NOT NULL
+                    GROUP BY segment ORDER BY ${metricAggregation} DESC LIMIT 10
                 ),
                 MonthlyData AS (
-                    SELECT
-                        DATE_TRUNC(e.timestamp, MONTH) AS month,
-                        ${segmentCol} AS segment,
-                        ${metricAggregation} AS value
+                    SELECT DATE_TRUNC(e.timestamp, MONTH) AS month, ${segmentCol} AS segment, ${metricAggregation} AS value
                     ${fromClause}
-                    ${whereClause}
+                    ${baseWhere} ${metric.startsWith('attributed_') ? whereClause : ''}
                     GROUP BY month, segment
                 )
-                SELECT
-                    FORMAT_TIMESTAMP('%Y-%m-%d', md.month) AS month,
-                    md.segment,
-                    md.value
+                SELECT FORMAT_TIMESTAMP('%Y-%m-%d', md.month) AS month, md.segment, md.value
                 FROM MonthlyData AS md
                 INNER JOIN TopSegments AS ts ON md.segment = ts.segment
                 ORDER BY month, value DESC
@@ -316,7 +323,6 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
              let finalSelects = [`FORMAT_TIMESTAMP('%Y-%m-%d', month) as month`];
              let finalFrom = '';
              let finalJoin = new Set<string>();
-
              if(baseChartMetrics.length > 0) {
                  const baseSelects = baseChartMetrics.map((m: string) => {
                      if (m === 'companies') return `COUNT(DISTINCT dd_company_id) AS companies`;
