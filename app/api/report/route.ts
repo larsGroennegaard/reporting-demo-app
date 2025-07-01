@@ -19,7 +19,6 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
   }
 };
 
-// NEW, REFACTORED HELPER FUNCTION for generating filter clauses
 const _buildEngagementFilterClauses = (config: any, eventsAlias: string = 'e'): string => {
   let filterClauses = '';
   if (config.filters?.selectedChannels?.length > 0) {
@@ -37,7 +36,6 @@ const _buildEngagementFilterClauses = (config: any, eventsAlias: string = 'e'): 
   return filterClauses;
 };
 
-// MODIFIED to use the new helper function
 const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
   const timeClause = getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
   const filterClauses = _buildEngagementFilterClauses(config, eventsAlias);
@@ -220,6 +218,9 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
     const getSegmentColumn = (prop: string, tableAlias: string = 'e') => {
         if (prop === 'companyCountry') return 'c.properties.country';
         if (prop === 'numberOfEmployees') return 'c.properties.number_of_employees';
+        // If alias is 'r' (for attribution), get channel from its nested session record
+        if (tableAlias === 'r') return 'r.session.channel';
+        // Default to events table alias
         return `${tableAlias}.session.channel`;
     };
 
@@ -272,25 +273,28 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
             
             if (metric.startsWith('attributed_')) {
                 const rawStage = metric.replace('attributed_', '').replace(/_deals/g, '');
-                // Use 'e' as alias for segment column source because we now join to events table
-                const segmentCol = getSegmentColumn(config.segmentationProperty, 'e');
                 const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(config.segmentationProperty);
-                
-                // FROM clause now joins events (e) so we can apply all filters
-                let fromClauseForAttribution = `FROM ${attributionTable} r INNER JOIN ${eventsTable} e ON r.dd_session_id = e.dd_session_id LEFT JOIN UNNEST(r.attribution) a`;
+                // Use alias 'r' for attribution table, 'c' for companies
+                const segmentCol = getSegmentColumn(config.segmentationProperty, needsCompanyJoin ? 'c' : 'r');
+
+                // CTE to get sessions matching all UI filters
+                const filteredSessionsCTE = `FilteredSessions AS (
+                    ${buildEngagementWhereClause(config, 'e').replace('WHERE', 'SELECT DISTINCT e.dd_session_id FROM ' + eventsTable + ' e WHERE')}
+                )`;
+
+                let fromClauseForAttribution = `FROM ${attributionTable} r LEFT JOIN UNNEST(r.attribution) a`;
                 if(needsCompanyJoin) {
-                    fromClauseForAttribution += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+                    fromClauseForAttribution += ` LEFT JOIN ${companiesTable} c ON r.dd_company_id = c.dd_company_id`;
                 }
 
-                // THE FIX IS HERE: Build a complete WHERE clause using the new helper
-                const timeFilter = getTimePeriodClause(config.timePeriod, 'r.timestamp');
-                const engagementFilters = _buildEngagementFilterClauses(config, 'e');
-                const whereClauseForAttribution = `WHERE 1=1 ${timeFilter} AND r.stage.name = '${sanitizeForSql(rawStage)}' AND a.model = 'Data-Driven'${engagementFilters}`;
+                // Main WHERE clause now filters attribution data AND uses the session CTE
+                const whereClauseForAttribution = `WHERE a.model = 'Data-Driven' AND r.stage.name = '${sanitizeForSql(rawStage)}' AND r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)`;
 
                 const metricAggregation = `SUM(a.weight)`;
 
                 return `
-                    WITH TopSegments AS (
+                    WITH ${filteredSessionsCTE},
+                    TopSegments AS (
                         SELECT ${segmentCol} AS segment
                         ${fromClauseForAttribution}
                         ${whereClauseForAttribution} AND ${segmentCol} IS NOT NULL
