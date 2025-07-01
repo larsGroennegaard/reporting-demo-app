@@ -21,9 +21,9 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
   const [inputValue, setInputValue] = useState('');
 
   const examplePrompts = [
-    "Show me my top 10 converting landing pages",
-    "Which marketing channels have the highest ROI?",
-    "Compare paid vs organic traffic conversion rate over time"
+    "How much newbiz and pipeline did we generate last quarter?",
+    "Show me the new biz impact of marketing channels this year",
+    "Show me the impact of LLMs on mql, pipeline and newbiz over this year",
   ];
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -52,7 +52,7 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
               </div>
             )}
             <div className={`p-3 rounded-lg max-w-sm ${msg.sender === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-700'}`}>
-              <p className="text-sm">{msg.text}</p>
+              <p className="text-xs">{msg.text}</p>
             </div>
              {msg.sender === 'user' && (
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center">
@@ -65,14 +65,14 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
 
       {/* Example Prompts */}
       <div className="p-4 border-t border-gray-700">
-          <p className="text-sm text-gray-400 mb-2">Example prompts</p>
+          <p className="text-xs text-gray-400 mb-2">Example prompts</p>
           <div className="space-y-2">
               {examplePrompts.map(prompt => (
                   <button 
                     key={prompt} 
                     onClick={() => handlePromptClick(prompt)}
                     disabled={isGenerating}
-                    className="w-full text-left text-sm p-2 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="w-full text-left text-xs p-2 bg-gray-700 hover:bg-gray-600 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                       {prompt}
                   </button>
@@ -88,11 +88,11 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             placeholder="Describe what you want to see..."
-            className="flex-grow bg-gray-700 border-gray-600 text-white rounded-md p-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="flex-grow bg-gray-700 border-gray-600 text-white rounded-md p-3 text-sm focus:ring-indigo-500 focus:border-indigo-500"
             disabled={isGenerating}
           />
-          <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500 disabled:cursor-not-allowed" disabled={isGenerating}>
-            {isGenerating ? 'Generating...' : 'Generate'}
+          <button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-1.5 px-3 text-sm rounded disabled:bg-gray-500 disabled:cursor-not-allowed" disabled={isGenerating}>
+            Generate
           </button>
         </form>
       </div>

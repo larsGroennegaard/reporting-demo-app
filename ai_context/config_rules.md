@@ -13,6 +13,7 @@ AI Guidance: Report Configuration Generation1. Primary Goal & Output FormatYour 
   "segmentationProperty": "companyCountry" | "numberOfEmployees",
   "kpiCardConfig": "{ id: number, metric: string }[]"
 }
+
 Schema B: EngagementReportStateUsed for questions about user activities (e.g., "show me sessions from paid search").{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series" | "segmentation",
@@ -35,7 +36,9 @@ Schema B: EngagementReportStateUsed for questions about user activities (e.g., "
   "segmentationProperty": "'channel' | 'companyCountry' | 'numberOfEmployees'",
   "kpiCardConfig": "{ id: number, metric: string }[]"
 }
-{{DYNAMIC_PROMPT_CONTEXT}}4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.User Question: "what was our newbiz for 2025"BAD JSON Output:{
+{{DYNAMIC_PROMPT_CONTEXT}}4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.
+
+Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.User Question: "what was our newbiz for 2025"BAD JSON Output:{
     "reportFocus": "time_series",
     "timePeriod": "this_year",
     "selectedMetrics": { "NewBiz": ["deals", "value"] }
@@ -59,3 +62,132 @@ Example: Missing reportArchetype (GOOD)This is GOOD because it correctly identif
     ]
 }
 5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
+
+
+EXAMPLES:
+Note that all filters and values must be inferred from the provided context 
+
+
+QUESTION
+how much pipeline did we get from paid search and paid social last quarter?
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "last_quarter",
+  "metrics": {
+    "base": [
+      "sessions",
+      "events"
+    ],
+    "influenced": {
+      "SQL": [
+        "deals",
+        "value"
+      ]
+    },
+    "attributed": {
+      "SQL": [
+        "deals"
+      ]
+    }
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [],
+    "url": "",
+    "selectedChannels": [
+      "Paid Search",
+      "Paid Social"
+    ]
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "multi_metric",
+  "singleChartMetric": "influenced_SQL_deals",
+  "multiChartMetrics": [
+    "attributed_SQL_deals",
+    "influenced_SQL_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751410696325,
+      "metric": "events"
+    },
+    {
+      "id": 1751410697222,
+      "metric": "sessions"
+    },
+    {
+      "id": 1751410699502,
+      "metric": "attributed_SQL_deals"
+    },
+    {
+      "id": 1751410711644,
+      "metric": "influenced_SQL_value"
+    },
+    {
+      "id": 1751410760559,
+      "metric": "influenced_SQL_deals"
+    }
+  ]
+}
+
+
+QUESTION:
+how much value did our organic and paid search generate this year
+
+Answer
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "this_year",
+  "metrics": {
+    "base": [
+      "sessions"
+    ],
+    "influenced": {
+      "SQL": [
+        "deals"
+      ],
+      "NewBiz": [
+        "deals"
+      ],
+      "MQL": [
+        "deals"
+      ]
+    },
+    "attributed": {}
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [],
+    "url": null,
+    "selectedChannels": [
+      "Paid Search",
+      "Paid Social",
+      "Organic Search",
+      "Organic Social"
+    ]
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "single_segmented",
+  "singleChartMetric": "influenced_SQL_deals",
+  "multiChartMetrics": [
+    "influenced_SQL_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751411265417,
+      "metric": "sessions"
+    },
+    {
+      "id": 1751411267997,
+      "metric": "influenced_SQL_deals"
+    },
+    {
+      "id": 1751411270202,
+      "metric": "influenced_NewBiz_deals"
+    }
+  ]
+}

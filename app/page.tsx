@@ -247,7 +247,6 @@ export default function HomePage() {
         }
         setReportArchetype(data.config.reportArchetype);
         setCurrentQuery(query);
-        // setActiveView('configure'); // <-- THIS LINE IS REMOVED TO KEEP THE CHAT VIEW OPEN
         setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Configuration received. Fetching report data...' } : m));
 
     } catch (error) {
@@ -399,7 +398,7 @@ export default function HomePage() {
   // --- MAIN RENDER ---
   return (
     <main className="flex h-screen bg-gray-900 text-gray-300 font-sans">
-      <div className="w-1/3 max-w-sm flex flex-col bg-gray-800 shadow-lg">
+      <div className="w-1/3 max-w-md flex flex-col bg-gray-800 shadow-lg">
         <div className="p-4 border-b border-gray-700">
             <div className="flex bg-gray-700 rounded-md p-1">
                 <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
