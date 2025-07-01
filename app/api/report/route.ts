@@ -106,11 +106,12 @@ export async function POST(request: NextRequest) {
       let chartQuery = '';
       const needsCompanyJoin = config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
       
-      const chartMetrics = config.chartMode === 'single_segmented' ? [config.singleChartMetric] : config.multiChartMetrics;
-      
-      // FIX: Rewritten this block to be more robust and avoid type errors.
-      const allInfluencedStagesInChart = chartMetrics
-          .filter((m): m is string => typeof m === 'string' && m.startsWith('influenced_'))
+      // FIX: This block is rewritten to be more defensive and ensure type safety.
+      const chartMetricsSource = config.chartMode === 'single_segmented' ? [config.singleChartMetric] : config.multiChartMetrics;
+      const cleanChartMetrics: string[] = Array.isArray(chartMetricsSource) ? chartMetricsSource.filter((m): m is string => typeof m === 'string') : [];
+
+      const allInfluencedStagesInChart = cleanChartMetrics
+          .filter(m => m.startsWith('influenced_'))
           .map(m => m.replace('influenced_', '').replace(/_deals|_value/g, ''))
           .filter((v, i, a) => a.indexOf(v) === i);
       
@@ -142,7 +143,7 @@ export async function POST(request: NextRequest) {
       
       if (config.reportFocus === 'segmentation') {
         const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
+        const chartSelects = cleanChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
         chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${chartFromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
       } else { // time_series
         const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(e.timestamp, MONTH)) as month`;
@@ -151,14 +152,14 @@ export async function POST(request: NextRequest) {
           const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
           chartQuery = metricSelect ? `SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} ${chartFromClause} ${whereClause} GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month` : '';
         } else { // multi_metric
-          const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
+          const chartSelects = cleanChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
           chartQuery = chartSelects ? `SELECT ${monthSelect}, ${chartSelects} ${chartFromClause} ${whereClause} GROUP BY month ORDER BY month` : '';
         }
       }
 
 
 
-
+      
 
       const [[kpiResults]] = kpiQuery ? await bigquery.query(kpiQuery) : [[]];
       const [chartResults] = chartQuery ? await bigquery.query(chartQuery) : [[]];
