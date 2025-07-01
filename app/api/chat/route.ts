@@ -10,7 +10,6 @@ async function readAIContextFile(filename: string): Promise<string> {
     return await fs.readFile(filepath, 'utf-8');
   } catch (error) {
     console.error(`Error reading ${filename}:`, error);
-    // Return an empty string or a specific error message if the file is critical
     return `/* Error: Could not load ${filename} */`;
   }
 }
@@ -29,7 +28,6 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Step 2: Generate Natural Language Answer ---
-  // If kpiData is present, we are in the second step of the workflow.
   if (kpiData) {
     const summaryPrompt = `
       Based on the following data, provide a concise, natural language answer to the user's question.
@@ -66,44 +64,57 @@ export async function POST(request: NextRequest) {
   }
 
   // --- Step 1: Generate Report Configuration ---
-  // If kpiData is not present, we are in the first step.
   else {
-    const configRules = await readAIContextFile('config_rules.md');
-
-    // REFINED PROMPT: This prompt is now simpler and relies entirely on the config_rules.md file for context.
-    const systemPrompt = `
-      ${configRules}
-
-      User's Question: "${query}"
-
-      Now, generate the JSON configuration object that answers this question based on the rules and schemas provided above.
-    `;
-
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
-      });
+        const configRules = await readAIContextFile('config_rules.md');
 
-      const result = await response.json();
-      
-      const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
-      const jsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+        const systemPrompt = `
+          ${configRules}
 
-      const config = JSON.parse(jsonText);
-      
-      if (config.kpiCardConfig && Array.isArray(config.kpiCardConfig)) {
+          User's Question: "${query}"
+
+          Now, generate the JSON configuration object that answers this question based on the rules and schemas provided above.
+        `;
+        
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ contents: [{ parts: [{ text: systemPrompt }] }] })
+        });
+
+        const result = await response.json();
+        
+        let config;
+        try {
+            const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
+            const jsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
+            config = JSON.parse(jsonText);
+        } catch (e) {
+            console.error("Failed to parse JSON from AI:", e);
+            throw new Error("AI returned malformed JSON");
+        }
+
+        // Validate and sanitize the config object
+        if (!config) {
+            throw new Error("AI returned an empty config");
+        }
+
+        // Ensure kpiCardConfig is an array, even if missing
+        if (!config.kpiCardConfig || !Array.isArray(config.kpiCardConfig)) {
+            config.kpiCardConfig = [];
+        }
+
+        // Add unique IDs to the cards that were generated
         config.kpiCardConfig.forEach((card: any, index: number) => {
             card.id = Date.now() + index;
         });
-      }
 
-      return NextResponse.json({ config });
+        return NextResponse.json({ config });
 
     } catch (error) {
-      console.error("Error generating or parsing config:", error);
-      return new NextResponse(JSON.stringify({ error: 'Failed to generate report configuration.' }), { status: 500 });
+        console.error("Error in chat config generation:", error);
+        const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+        return new NextResponse(JSON.stringify({ error: 'Failed to generate report configuration.', details: errorMessage }), { status: 500 });
     }
   }
 }
