@@ -191,3 +191,65 @@ Answer
     }
   ]
 }
+
+
+questoin
+Show me the impact of LLMs on mql, pipeline and newbiz over this year
+
+answer
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "this_year",
+  "metrics": {
+    "base": [
+      "sessions"
+    ],
+    "influenced": {
+      "MQL": [
+        "deals",
+        "value"
+      ],
+      "SQL": [
+        "deals",
+        "value"
+      ],
+      "NewBiz": [
+        "deals",
+        "value"
+      ]
+    },
+    "attributed": {}
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [],
+    "url": null,
+    "selectedChannels": [
+      "Organic LLM"
+    ]
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "multiple_metrics",
+  "singleChartMetric": "influenced_MQL_deals",
+  "multiChartMetrics": [
+    "influenced_MQL_deals",
+    "influenced_SQL_deals",
+    "influenced_NewBiz_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751412212418,
+      "metric": "influenced_MQL_deals"
+    },
+    {
+      "id": 1751412215981,
+      "metric": "influenced_SQL_deals"
+    },
+    {
+      "id": 1751412219881,
+      "metric": "influenced_NewBiz_deals"
+    }
+  ]
+}
