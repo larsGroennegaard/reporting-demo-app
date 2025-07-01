@@ -3,6 +3,34 @@ import { NextResponse, NextRequest } from 'next/server';
 import { promises as fs } from 'fs';
 import path from 'path';
 
+// --- Default Config Objects for Validation ---
+const defaultEngagementConfig = {
+    reportFocus: 'time_series',
+    timePeriod: 'this_year',
+    metrics: { base: [], influenced: {}, attributed: {} },
+    filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
+    funnelLength: 'unlimited',
+    chartMode: 'multi_metric',
+    singleChartMetric: 'sessions',
+    multiChartMetrics: [],
+    segmentationProperty: 'channel',
+    kpiCardConfig: [],
+};
+
+const defaultOutcomeConfig = {
+    reportFocus: 'time_series',
+    timePeriod: 'this_year',
+    selectedMetrics: {},
+    selectedCountries: [],
+    selectedEmployeeSizes: [],
+    chartMode: 'multiple_metrics',
+    singleChartMetric: '',
+    multiChartMetrics: [],
+    segmentationProperty: 'companyCountry',
+    kpiCardConfig: [],
+};
+
+
 // Helper function to read files from the ai_context directory
 async function readAIContextFile(filename: string): Promise<string> {
   try {
@@ -60,7 +88,6 @@ export async function POST(request: NextRequest) {
     return new NextResponse(JSON.stringify({ error: 'Query is required.' }), { status: 400 });
   }
   
-  // THE FIX: Use the correct model name 'gemini-1.5-flash-latest'
   const modelName = 'gemini-1.5-flash-latest';
 
   // --- Step 2: Generate Natural Language Answer ---
@@ -141,23 +168,43 @@ export async function POST(request: NextRequest) {
             throw new Error("Invalid response structure from Gemini API. No candidates found.");
         }
         
-        let config;
+        let aiConfig;
         const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
         
         try {
-            config = JSON.parse(rawText);
-            console.log("Successfully parsed JSON config.");
+            aiConfig = JSON.parse(rawText);
+            console.log("Successfully parsed JSON config from AI.");
         } catch (e) {
             console.error("This should not happen, but failed to parse guaranteed JSON:", e);
             throw new Error("Failed to parse the JSON response from the AI.");
         }
 
-        if (!config) throw new Error("AI returned an empty config");
-        if (!config.kpiCardConfig) config.kpiCardConfig = [];
-        config.kpiCardConfig.forEach((card: any, index: number) => { card.id = Date.now() + index; });
+        if (!aiConfig || !aiConfig.reportArchetype) throw new Error("AI response is missing reportArchetype");
 
-        console.log("Final config object being sent to frontend:", JSON.stringify(config, null, 2));
-        return NextResponse.json({ config });
+        // THE FIX: Merge the AI's partial config with the correct default object to ensure it's complete.
+        let finalConfig;
+        if (aiConfig.reportArchetype === 'outcome_analysis') {
+            finalConfig = { ...defaultOutcomeConfig, ...aiConfig };
+        } else {
+             finalConfig = {
+                ...defaultEngagementConfig,
+                ...aiConfig,
+                metrics: {
+                    ...defaultEngagementConfig.metrics,
+                    ...(aiConfig.metrics || {})
+                },
+                filters: {
+                    ...defaultEngagementConfig.filters,
+                    ...(aiConfig.filters || {})
+                }
+            };
+        }
+        
+        if (!finalConfig.kpiCardConfig) finalConfig.kpiCardConfig = [];
+        finalConfig.kpiCardConfig.forEach((card: any, index: number) => { card.id = Date.now() + index; });
+
+        console.log("Final, validated config object being sent to frontend:", JSON.stringify(finalConfig, null, 2));
+        return NextResponse.json({ config: finalConfig });
 
     } catch (error) {
         console.error("Error in chat config generation:", error);
