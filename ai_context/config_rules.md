@@ -269,5 +269,93 @@ answer
 
 
 
+QUESTION:Show me the new biz impact of marketing channels this year
+ANSWER
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "this_year",
+  "metrics": {
+    "base": [
+      "sessions"
+    ],
+    "influenced": {
+      "NewBiz": [
+        "deals",
+        "value"
+      ],
+      "SQL": [
+        "value",
+        "deals"
+      ]
+    },
+    "attributed": {
+      "NewBiz": [
+        "deals"
+      ],
+      "SQL": [
+        "deals"
+      ]
+    }
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [],
+    "url": null,
+    "selectedChannels": [
+      "Paid Search",
+      "Paid Social",
+      "Organic Search",
+      "Organic Social",
+      "Emails",
+      "Display",
+      "Paid Video",
+      "Podcast",
+      "Review Sites",
+      "Webinar",
+      "Paid Other",
+      "Organic Video",
+      "Organic LLM",
+      "Events",
+      "Display Ads",
+      "Content Syndication",
+      "Content"
+    ]
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "single_segmented",
+  "singleChartMetric": "influenced_NewBiz_deals",
+  "multiChartMetrics": [
+    "influenced_NewBiz_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751413832309,
+      "metric": "attributed_SQL_deals"
+    },
+    {
+      "id": 1751413911253,
+      "metric": "influenced_SQL_deals"
+    },
+    {
+      "id": 1751413912991,
+      "metric": "influenced_SQL_value"
+    },
+    {
+      "id": 1751413913908,
+      "metric": "influenced_NewBiz_deals"
+    },
+    {
+      "id": 1751413915943,
+      "metric": "attributed_NewBiz_deals"
+    },
+    {
+      "id": 1751413936280,
+      "metric": "influenced_NewBiz_value"
+    }
+  ]
+}
+
 
 5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
