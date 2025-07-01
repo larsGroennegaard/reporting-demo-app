@@ -64,6 +64,11 @@ Example: Missing reportArchetype (GOOD)This is GOOD because it correctly identif
 5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
 
 
+Interpretation: 
+pipeline often means generated newbiz pipeline. Look for stage names like SQO, SQL or Opportunity created
+marketing channels: exclude channels called things like sales, bdr, sdr, calls, outbound (things that are clearly not marketing activity)
+
+
 EXAMPLES:
 Note that all filters and values must be inferred from the provided context 
 
