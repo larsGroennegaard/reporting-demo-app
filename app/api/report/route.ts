@@ -20,8 +20,7 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
 };
 
 const buildEngagementWhereClause = (config: any, eventsAlias: string = 'e'): string => {
-  let whereClauses = "WHERE 1=1";
-  whereClauses += getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`);
+  let whereClauses = `WHERE 1=1 ${getTimePeriodClause(config.timePeriod, `${eventsAlias}.timestamp`)}`;
   if (config.filters?.eventNames?.length > 0) {
     whereClauses += ` AND ${eventsAlias}.event_name IN (${config.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
   }
@@ -56,71 +55,70 @@ export async function POST(request: NextRequest) {
 
     if (config.reportArchetype === 'engagement_analysis') {
       const whereClause = buildEngagementWhereClause(config, 'e');
-      const needsCompanyJoin = config.reportFocus === 'segmentation' || (config.reportFocus === 'time_series' && config.chartMode === 'single_segmented');
+      
+      const hasBaseMetrics = config.metrics.base.length > 0;
+      const hasInfluencedMetrics = Object.keys(config.metrics.influenced).length > 0;
+      
+      let ctes = [];
+      let finalSelects = [];
+      let finalFrom = "";
+      let finalGroupBy = [];
 
-      let fromClause = `FROM ${eventsTable} e`;
-      if (needsCompanyJoin) {
-        fromClause += ` LEFT JOIN ${companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+      if (hasBaseMetrics) {
+        const baseSelects = config.metrics.base.map((m:string) => {
+            if(m === 'companies') return 'COUNT(DISTINCT dd_company_id) AS companies';
+            if(m === 'contacts') return 'COUNT(DISTINCT dd_contact_id) AS contacts';
+            if(m === 'events') return 'COUNT(DISTINCT dd_event_id) AS events';
+        }).join(', ');
+
+        ctes.push(`BaseMetrics AS (SELECT ${baseSelects} FROM ${eventsTable} e ${whereClause})`);
+        finalSelects.push(...config.metrics.base.map((m:string) => `bm.${m}`));
+        finalFrom += 'BaseMetrics AS bm';
       }
-      
-      const allInfluencedStages = Object.keys(config.metrics.influenced);
-      const influencedJoins = allInfluencedStages.map(stage => {
-        const sanitizedStage = stage.replace(/\s/g, '_');
-        return `LEFT JOIN UNNEST(e.stages) AS s_${sanitizedStage} ON s_${sanitizedStage}.name = '${sanitizeForSql(stage)}'`;
-      }).join(' ');
 
-      fromClause += ` ${influencedJoins}`;
-      
-      // KPI Query
-      let kpiSelects = new Set<string>();
-      if(config.metrics.base.includes('companies')) kpiSelects.add('COUNT(DISTINCT e.dd_company_id) AS companies');
-      if(config.metrics.base.includes('contacts')) kpiSelects.add('COUNT(DISTINCT e.dd_contact_id) AS contacts');
-      if(config.metrics.base.includes('events')) kpiSelects.add('COUNT(DISTINCT e.dd_event_id) AS events');
-      
-      allInfluencedStages.forEach(stage => {
-        const sanitizedStage = stage.replace(/\s/g, '_');
-        if(config.metrics.influenced[stage].includes('deals')) kpiSelects.add(`COUNT(DISTINCT s_${sanitizedStage}.dd_stage_id) AS influenced_${sanitizedStage}_deals`);
-        if(config.metrics.influenced[stage].includes('value')) kpiSelects.add(`SUM(s_${sanitizedStage}.value) AS influenced_${sanitizedStage}_value`);
-      });
-
-      const kpiQuery = kpiSelects.size > 0 ? `SELECT ${Array.from(kpiSelects).join(', ')} ${fromClause} ${whereClause}` : '';
-
-      // Chart Query
-      let chartQuery = '';
-      const getMetricSelect = (metric: string, isChart: boolean = false) => {
-        if(metric.startsWith('influenced_')) {
-          const [,,stage,type] = metric.split('_');
+      if (hasInfluencedMetrics) {
+        ctes.push(`InfluencedDeals AS (SELECT DISTINCT s.dd_stage_id, s.name, s.value FROM ${eventsTable} e, UNNEST(e.stages) AS s ${whereClause})`);
+        
+        const influencedSelects = Object.entries(config.metrics.influenced).flatMap(([stage, types]) => {
           const sanitizedStage = stage.replace(/\s/g, '_');
-          const alias = isChart ? 'value' : metric;
-          return type === 'deals' 
-            ? `COUNT(DISTINCT s_${sanitizedStage}.dd_stage_id) AS ${alias}`
-            : `SUM(s_${sanitizedStage}.value) AS ${alias}`;
+          return (types as string[]).map(type => {
+            if (type === 'deals') return `COUNT(DISTINCT CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.dd_stage_id END) AS influenced_${sanitizedStage}_deals`;
+            if (type === 'value') return `SUM(CASE WHEN id.name = '${sanitizeForSql(stage)}' THEN id.value END) AS influenced_${sanitizedStage}_value`;
+            return '';
+          });
+        });
+        finalSelects.push(...influencedSelects);
+
+        if (finalFrom) {
+          finalFrom += ", InfluencedDeals AS id";
+        } else {
+          finalFrom += "InfluencedDeals AS id";
         }
-        const alias = isChart ? 'value' : metric;
-        if(metric === 'companies') return `COUNT(DISTINCT e.dd_company_id) AS ${alias}`;
-        if(metric === 'contacts') return `COUNT(DISTINCT e.dd_contact_id) AS ${alias}`;
-        if(metric === 'events') return `COUNT(DISTINCT e.dd_event_id) AS ${alias}`;
-        return '';
       }
       
-      if (config.reportFocus === 'segmentation') {
-        const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-        const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
-        chartQuery = chartSelects ? `SELECT ${segmentCol} as segment, ${chartSelects} ${fromClause} ${whereClause} GROUP BY segment HAVING segment IS NOT NULL ORDER BY segment` : '';
-      } else { // time_series
-        const monthSelect = `FORMAT_TIMESTAMP('%Y-%m-%d', DATE_TRUNC(e.timestamp, MONTH)) as month`;
-        if (config.chartMode === 'single_segmented') {
-          const metricSelect = getMetricSelect(config.singleChartMetric, true);
-          const segmentCol = config.segmentationProperty === 'companyCountry' ? 'c.properties.country' : 'c.properties.number_of_employees';
-          chartQuery = metricSelect ? `SELECT ${monthSelect}, ${segmentCol} as segment, ${metricSelect} ${fromClause} ${whereClause} GROUP BY month, segment HAVING segment IS NOT NULL ORDER BY month` : '';
-        } else { // multi_metric
-          const chartSelects = config.multiChartMetrics.map((m: string) => getMetricSelect(m)).filter(Boolean).join(', ');
-          chartQuery = chartSelects ? `SELECT ${monthSelect}, ${chartSelects} ${fromClause} ${whereClause} GROUP BY month ORDER BY month` : '';
+      if(finalSelects.length > 0 && finalFrom) {
+        // Build the GROUP BY clause from the base metrics that were selected
+        const groupBySelects = config.metrics.base.map((m: string) => `bm.${m}`);
+        if(groupBySelects.length > 0) {
+          finalGroupBy.push(...groupBySelects);
         }
       }
+      
+      let kpiQuery = '';
+      if(finalSelects.length > 0) {
+        kpiQuery = `
+          WITH ${ctes.join(', ')}
+          SELECT ${finalSelects.join(', ')}
+          FROM ${finalFrom}
+          ${finalGroupBy.length > 0 ? `GROUP BY ${finalGroupBy.join(', ')}` : ''}
+        `;
+      }
 
+      // Chart query logic is still pending full implementation
+      const chartQuery = '';
+      
       const [[kpiResults]] = kpiQuery ? await bigquery.query(kpiQuery) : [[]];
-      const [chartResults] = chartQuery ? await bigquery.query(chartQuery) : [[]];
+      const chartResults: any[] = [];
 
       return NextResponse.json({ kpiData: kpiResults, chartData: chartResults });
 
@@ -134,8 +132,7 @@ export async function POST(request: NextRequest) {
           fromClause += ` LEFT JOIN ${companiesTable} c ON s.dd_company_id = c.dd_company_id`;
       }
       
-      let whereClause = "WHERE 1=1";
-      whereClause += getTimePeriodClause(config.timePeriod, 's.timestamp');
+      let whereClause = `WHERE 1=1 ${getTimePeriodClause(config.timePeriod, 's.timestamp')}`;
       if(config.selectedCountries?.length > 0) whereClause += ` AND c.properties.country IN (${config.selectedCountries.map((c:string) => `'${sanitizeForSql(c)}'`).join(',')})`;
       if(config.selectedEmployeeSizes?.length > 0) whereClause += ` AND c.properties.number_of_employees IN (${config.selectedEmployeeSizes.map((s:string) => `'${sanitizeForSql(s)}'`).join(',')})`;
       
