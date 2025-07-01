@@ -1,0 +1,153 @@
+[
+  {
+    "name": "dd_company_id",
+    "type": "STRING",
+    "description": "Id for the company within the Dreamdata system (Primary key)"
+  },
+  {
+    "name": "domain",
+    "type": "STRING",
+    "description": "Company domain"
+  },
+  {
+    "name": "all_domains",
+    "type": "STRING",
+    "mode": "REPEATED",
+    "description": "List of all domains associated with the company. This defines which anonymous events (events with only a company domain) are associated with the company."
+  },
+  {
+    "name": "account_owner",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "email",
+        "type": "STRING",
+        "description": "Account owner email address from primary CRM"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": " Account owner name from primary CRM"
+      }
+    ],
+    "description": "Record containing info about the account owner in the primary CRM. Will be empty if company is not found in primary CRM."
+  },
+  {
+    "name": "properties",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "created_date",
+        "type": "TIMESTAMP",
+        "description": "Date when the company record was created"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Company name"
+      },
+      {
+        "name": "country",
+        "type": "STRING",
+        "description": "Company country"
+      },
+      {
+        "name": "industry",
+        "type": "STRING",
+        "description": "Industry the company belongs to"
+      },
+      {
+        "name": "annual_revenue",
+        "type": "STRING",
+        "description": "Binned annual revenue of the company."
+      },
+      {
+        "name": "number_of_employees",
+        "type": "STRING",
+        "description": "Binned number of employees at the company."
+      },
+      {
+        "name": "linkedin_url",
+        "type": "STRING",
+        "description": "Company's LinkedIn profile URL."
+      },
+      {
+        "name": "is_from_primary_crm",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the record originated from the primary CRM system"
+      },
+      {
+        "name": "is_anonymous_company",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the company is anonymous. An anonymous company is one that is not from the primary CRM and does not have any contacts with a business email associated. Most company counts in the Dreamdata UI are make using is_anonymous_company = FALSE i.e. not including anonymous companies."
+      },
+      {
+        "name": "engagement_score",
+        "type": "FLOAT",
+        "description": "Engagement score for the company within the last 30 days (0-1). This value is automatically calculated by the Dreamdata platform based on the company’s activities within the last 30 days"
+      }
+    ],
+    "description": "Record containing company properties. The properties are combined from the different source integrations using waterfall enrichment prioritizing 1. The primary CRM 2. Other integrations including active intent providers 3. Dreamdata's proprietary AI enrichment and labeling."
+  },
+  {
+    "name": "custom_properties",
+    "type": "JSON",
+    "description": "Custom company properties in JSON format. These are the selected properties from the primary CRM. Which properties are included is controlled through the Dreamdata source UI"
+  },
+  {
+    "name": "source_system",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Id for the object record in the source system. This will not necessarily match the 'dd_' id, but is useful for locating records in the source systems directly"
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Name of the source system like hubspot, salesforce, etc."
+      },
+      {
+        "name": "object",
+        "type": "STRING",
+        "description": "The name of the object in the source system like companies, accounts, etc."
+      }
+    ],
+    "description": "Array containing the source systems in which the company was found."
+  },
+  {
+    "name": "audiences",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_audience_id",
+        "type": "STRING",
+        "description": "Id of the audience within the Dreamdata platform. This uniquely defines the audience"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the audience"
+      },
+      {
+        "name": "created_date",
+        "type": "TIMESTAMP",
+        "description": "Date for the creation of the audience"
+      },
+      {
+        "name": "description",
+        "type": "STRING",
+        "description": "Description of the audience given within the Dreamdata UI."
+      }
+    ],
+    "description": "Array containing the audiences the company is part of. Audiences can be defined using the no-code audience builder in the Dreamdata UI and will be automatically updated."
+  },
+  {
+    "name": "row_checksum",
+    "type": "STRING",
+    "description": "Checksum for the row. If any value in the row changes, the checksum changes otherwise it is unchanged. This should only be used to setup incremental table updates."
+  }
+]

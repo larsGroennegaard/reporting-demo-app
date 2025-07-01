@@ -1,0 +1,154 @@
+[
+  {
+    "name": "dd_stage_id",
+    "type": "STRING",
+    "description": "Unique identifier for each stage entry within the Dreamdata data model. (Primary key)"
+  },
+  {
+    "name": "stage_name",
+    "type": "STRING",
+    "description": "Name of the stage"
+  },
+  {
+    "name": "dd_object_id",
+    "type": "STRING",
+    "description": " Identifier for the object the stage is built on. This could be the id of the deal or opportunity the stage is built on. The dd_object_id is unique within each stage, but is not globally unique. Relationship with dd_stage_id: dd_stage_id is the combination of stage_name and dd_object_id"
+  },
+  {
+    "name": "dd_company_id",
+    "type": "STRING",
+    "description": "Unique identifier for the company associated with the stage (foreign key referencing dd_company_id in the company schema). Can be null if no company is associated with the stage."
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "description": "Timestamp when the stage was reached - not nullable"
+  },
+  {
+    "name": "value",
+    "type": "FLOAT",
+    "description": "Value indicating the revenue or similar value associated with reaching the stage."
+  },
+  {
+    "name": "primary_owner",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Unique identifier for the owner"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Owner's name"
+      },
+      {
+        "name": "email",
+        "type": "STRING",
+        "description": "Owner's email address."
+      }
+    ],
+    "description": "Record containing details about the owner in the source integration"
+  },
+  {
+    "name": "journey",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "type",
+        "type": "STRING",
+        "description": "Type of the journey. This determines which events are part of the stage journey. The type is set using the Dreamdata Data Hub UI. 'contact level': all activity associated with the contact (see dd_primary_contact_id) of the stage. 'company level': all activity associated with the company (see dd_company_id) of the stage. 'opportunity level': contacts on the opportunity (see object_contacts)"
+      },
+      {
+        "name": "start_date",
+        "type": "TIMESTAMP",
+        "description": "Start date of the stage journey. If NULL the journey includes all tracked data e.g. start date is the first tracked data."
+      },
+      {
+        "name": "end_date",
+        "type": "TIMESTAMP",
+        "description": "End date of the stage journey. If this is NULL the stage timestamp is the end date of the stage journey."
+      }
+    ],
+    "description": "Record containing details about the journey settings for the stage. The settings are controled from the Dreamdata Data Hub UI."
+  },
+  {
+    "name": "dd_primary_contact_id",
+    "type": "STRING",
+    "description": "Unique identifier for a single contact associated with the stage. This is only available for stages built on objects that have a single email associated with it like contacts or leads. (foreign key referencing dd_contact_id in the contacts schema)"
+  },
+  {
+    "name": "object_contacts",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_contact_id",
+        "type": "STRING",
+        "description": "Unique identifier for the contact associated with the stage (foreign key referencing dd_contact_id in the contacts schema)"
+      }
+    ],
+    "description": "Array containing details about all contacts on the object the stage is built on (can be empty). This is only available for stages built on objects that can have multiple email associated with it, like salesforce opportunities"
+  },
+  {
+    "name": "custom_properties",
+    "type": "JSON",
+    "description": "Custom stage properties in JSON format. These are selected properties from the object the stage is built on. If the stage is built on opportunities, it will contain properties selected from the opportunity object and if it is built on contacts it will contain properties selected from the contacts object. Which properties are included for each object is controlled through the Dreamdata source UI for the source of the object."
+  },
+  {
+    "name": "source_system",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Id for the object record in the source system."
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Name of the source system like hubspot, salesforce, etc."
+      },
+      {
+        "name": "object",
+        "type": "STRING",
+        "description": "The name of the object in the source system like contacts, leads, deals, opportunities etc."
+      }
+    ],
+    "description": "Array containing information about the source systems for the object the stage is built on"
+  },
+  {
+    "name": "stage_transitions",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_stage_id",
+        "type": "STRING",
+        "description": "Unique identifier for the stage transitioned to"
+      },
+      {
+        "name": "dd_object_id",
+        "type": "STRING",
+        "description": "Identifier for the object for the stage transitioned to"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the stage transitioned to"
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "description": "Time of the stage transitioned to"
+      }
+    ],
+    "description": "Array containing transitions between this stage and other stages. All stages in the array are reached after the this stage, by the same company or contact (depending on the type of stage). This is used for conversion rate calculations as all connected stages are pre-calculated depending on their specific types and can be accessed simply using the stage_transitions array"
+  },
+  {
+    "name": "row_checksum",
+    "type": "STRING",
+    "description": "Checksum for the row. If any value in the row changes, the checksum changes otherwise it is unchanged. This should only used to setup incremental table updates."
+  }
+]

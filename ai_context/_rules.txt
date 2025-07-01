@@ -1,0 +1,987 @@
+The dreamdata data platform can be used for answering questions about marketing and marketing's relation to sales
+It is made up of data from web tracking, CRM system, ad platforms and other GTM tools where data can fit into the fundamental data model of 
+events, stages, companies, contacts, spend
+Dreamdata data is always for a b2b company. That means that the account>contact structure is very fundamental.
+
+____________________________________________________________________________________________________________________________________
+
+
+The table "stages":
+
+PURPOSE: A stage defines a stage in the customer's funnel. The table "stages" can be used to answer questions about how many companies or contacts reached a certain stage in the funnel.
+
+The actual stage names will vary from customer to customer. 
+You must retrieve the appropriate stage name from the supplied _customer document. Always retain spelling and casing
+the location of the table will vary. You must retrieve the appropriate location from the supplied _customer document.
+
+Typical stages are 
+"new business" "MQL" (=marketing qualified lead) 
+"SQL" (=sales qualified lead)
+"SQO" (=sales qualified opportunity)
+
+Typical questions:
+
+QUESTION:
+how many new business deals did we get last quarter
+
+ANSWER:
+SELECT
+  COUNT(DISTINCT dd_stage_id)
+FROM
+  `[customer table location].stages`
+WHERE
+  stage_name = [Insert appropriate name based on customer_stages document]
+  AND timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 QUARTER), QUARTER))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))
+
+QUESTION
+What was the value of our sales qualified leads generated last month
+
+ANSWER:
+SELECT
+  SUM(value)
+FROM
+  `[customer table location].stages`
+WHERE
+  stage_name = [Insert appropriate name based on customer_stages document]
+  AND timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+
+QUESTION
+What was our conversion from mql to newbiz in Q1
+
+ANSWER
+WITH
+  t1 AS (
+  SELECT
+    COUNT(DISTINCT s.dd_stage_id) AS count_first_stage,
+    COUNT(DISTINCT
+      CASE
+        WHEN st.name = [Insert appropriate name based on customer_stages document - here it would be newbiz] THEN s.dd_stage_id
+        ELSE NULL
+    END
+      ) AS count_second_stage
+  FROM
+      `[customer table location].stages` AS s
+  LEFT JOIN
+    UNNEST(s.stage_transitions) AS st
+  WHERE
+    s.stage_name = [Insert appropriate name based on customer_stages document - here it would be mql]
+    AND s.timestamp >= '2025-01-01'
+    AND s.timestamp < '2025-04-01')
+SELECT
+  *,
+  count_second_stage/count_first_stage AS conversion_rate
+FROM
+  t1
+
+QUESTION
+What was our conversion from mql to SQL to newbiz in 2024
+
+ANSWER
+WITH MQL_Funnel_Flags AS (
+    -- This CTE flags each MQL from 2024 to see if it later transitioned to SQL and/or NewBiz
+    SELECT
+        s.dd_stage_id,
+        (SELECT LOGICAL_OR(st.name = [Insert appropriate name based on customer_stages document - here it would be SQL]) FROM UNNEST(s.stage_transitions) AS st) AS transitioned_to_sql,
+        (SELECT LOGICAL_OR(st.name = [Insert appropriate name based on customer_stages document - here it would be newbiz]) FROM UNNEST(s.stage_transitions) AS st) AS transitioned_to_newbiz
+    FROM
+        `[customer table location].stages` AS s
+    WHERE
+        s.stage_name = [Insert appropriate name based on customer_stages document - here it would be mql]
+        AND s.timestamp >= '2024-01-01'
+        AND s.timestamp < '2025-01-01'
+),
+FunnelCounts AS (
+    -- This CTE aggregates the flags to get total counts for each stage of the funnel
+    SELECT
+        COUNT(dd_stage_id) AS mql_count,
+        SUM(IF(transitioned_to_sql, 1, 0)) AS sql_count,
+        -- A deal is counted as converting to NewBiz only if it first converted to an SQL
+        SUM(IF(transitioned_to_sql AND transitioned_to_newbiz, 1, 0)) AS newbiz_count
+    FROM
+        MQL_Funnel_Flags
+)
+-- The final SELECT calculates the conversion rates between the funnel stages
+SELECT
+    mql_count,
+    sql_count,
+    newbiz_count,
+    SAFE_DIVIDE(sql_count, mql_count) AS mql_to_sql_conversion,
+    SAFE_DIVIDE(newbiz_count, sql_count) AS sql_to_newbiz_conversion
+FROM
+    FunnelCounts
+
+
+CAUTION: the stages table by default work at the account or contact level. Some times it is appropriate to look at the deal level. 
+At company level
+SELECT
+  ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
+FROM
+  `bi-dreamdata.dreamdata.stages` AS s,
+  UNNEST(s.stage_transitions) AS st
+WHERE
+  s.stage_name = 'SQL'
+  AND st.name = 'NewBiz'
+  AND s.timestamp >= '2025-01-01'
+  AND s.timestamp < '2026-01-01'
+
+At deal level
+SELECT
+  ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
+FROM
+  `bi-dreamdata.dreamdata.stages` AS s,
+  UNNEST(s.stage_transitions) AS st
+WHERE
+  s.stage_name = 'SQL'
+  AND st.name = 'NewBiz'
+  AND s.dd_object_id = st.dd_object_id
+  AND s.timestamp >= '2025-01-01'
+  AND s.timestamp < '2026-01-01'
+
+CAUTION: time in transitions
+when asked about calculating time from stage to stage in a period always pay close attention to whether the period is the time of the first stage or the second stage
+
+First stage
+SELECT
+  ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
+FROM
+  `bi-dreamdata.dreamdata.stages` AS s,
+  UNNEST(s.stage_transitions) AS st
+WHERE
+  s.stage_name = 'SQL'
+  AND st.name = 'NewBiz'
+  AND s.timestamp >= '2025-01-01'
+  AND s.timestamp < '2026-01-01'
+
+Second stage
+SELECT
+  ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
+FROM
+  `bi-dreamdata.dreamdata.stages` AS s,
+  UNNEST(s.stage_transitions) AS st
+WHERE
+  s.stage_name = 'SQL'
+  AND st.name = 'NewBiz'
+  AND st.timestamp >= '2025-01-01'
+  AND st.timestamp < '2026-01-01'
+ 
+
+____________________________________________________________________________________________________________________________________
+
+
+The table "companies":
+
+PURPOSE: In the table companies you find information about all the companies in our data platform. Each company is identified by an id dd_company_id that can be used to join it onto the other tables when needed. This enables segmentation of other tables.
+
+QUESTION
+how many companies that are software and services are there
+
+ANSWER
+SELECT
+  count (DISTINCT dd_company_id)
+FROM
+  `[customer table location].companies`
+WHERE
+  LOWER(properties.industry) in ( "software & services", "software and services", "software")
+
+
+QUESTION
+how many companies that are less than 1000 employees are there
+
+ANSWER
+SELECT
+  count (DISTINCT dd_company_id)
+FROM
+  `[customer table location].companies`
+WHERE
+   properties.number_of_employees in ("1 - 10", "11 - 50", "51 - 250", "251 - 1k")
+
+
+for the number of employees field the allowed values are : 
+1 - 10
+51 - 250
+10k - 50k
+50k - 100k
+11 - 50
+251 - 1k
+1k - 5k
+> 100k
+5k - 10k
+
+Be very careful to always use this way of refering to a number of customers
+If you are asked for something that falls inside of a bin use the bin inside the number (less than 1500 give data for 
+1 - 10
+51 - 250
+11 - 50
+251 - 1k)                                                                                           
+
+
+The country field is standardized to these countries spelled in this way:
+
+Australia,Denmark,United States,Switzerland,Spain,India,Bangladesh,Sweden,South Africa,Brazil,Canada,China,Mexico,France,Netherlands,United Kingdom,Papua New Guinea,Estonia,Belgium,Singapore,Uganda,Russia,American Samoa,Saudi Arabia,Germany,Venezuela,Egypt,Indonesia,Norway,Czechia,Uruguay,Montenegro,Italy,Turkey,Finland,Austria,Romania,Poland,New Zealand,Israel,Philippines,Zimbabwe,Guernsey,Luxembourg,Pakistan,Lithuania,Argentina,Greece,"Korea, Republic of",Peru,Ghana,Ireland,Taiwan,Nicaragua,United Arab Emirates,Nigeria,Portugal,Hungary,Honduras,Colombia,Ukraine,El Salvador,Cote d'Ivoire,Malaysia,Oman,Serbia,Azerbaijan,Andorra,Slovakia,Japan,Maldives,Kenya,Latvia,Jordan,Tunisia,Cyprus,Panama,Bosnia and Herzegovina,Chile,Croatia,Qatar,Morocco,Macedonia (FYROM),Hong Kong,Bulgaria,North Macedonia,Iceland,Madagascar,Thailand,Kosovo,Bahrain,Jamaica,Cayman Islands,Libya,Malta,Cameroon,Mozambique,Angola,Slovenia,Viet Nam,Costa Rica,Monaco,Trinidad and Tobago,Ecuador,Kyrgyzstan,Nepal,Puerto Rico,Isle of Man,Bahamas,Armenia,Jersey,Sudan,Tuerkiye,Guatemala,Bermuda,Somalia,Dominican Republic,Namibia,"Tanzania, United Republic of",Iraq,Algeria,Sri Lanka,Senegal,Iran (Islamic Republic of),Afghanistan,Congo,Faroe Islands,Mauritius,Uzbekistan,Mongolia,"Moldova, Republic of",Saint Lucia,Zambia,New Caledonia,Ethiopia,Georgia,Lebanon,Albania,Rwanda,Aruba,"Palestine, State of",Belarus,Barbados,Botswana,Curaçao,Gibraltar,Kuwait,Belize,Myanmar,Côte d'Ivoire,Macao,Virgin Islands (British),Paraguay,Saint Kitts and Nevis,Bolivia,Malawi,Fiji,Lao People's Democratic Republic,Kazakhstan,Cambodia,Virgin Islands (U.S.),Yemen,Dominica,Seychelles,Guam,Suriname,Guyana,Greenland,Sierra Leone,Togo,Liechtenstein,Mayotte,San Marino,Lesotho,French Polynesia,Réunion,Saint Vincent and the Grenadines,South Sudan,Guinea,Gambia,Central African Republic,Benin,Mali,Liberia,Mauritania,Solomon Islands,Antarctica,Anguilla,Sao Tome and Principe,Burundi,Syrian Arab Republic,Federal Russian Republic,Grenada,Haiti,Bhutan,Martinique,Sint Maarten (Dutch part),Cocos (Keeling) Islands,Cuba,"Macedonia, the former Yugoslav Republic of",Saint Barthélemy,Guadeloupe,Vanuatu,Gabon,Holy See,East Africa ,French Guiana,Niger,Åland Islands,Niue,Burkina Faso,Cabo Verde,Montserrat,Timor-Leste
+
+Be very careful to always use this way of refering a country    
+
+
+CUSTOM PROPERTIES :
+In the companies table you will find a field called CUSTOM PROPERTIES   
+It is a JSON field and holds a set of custom fields for the customer. You can find the actual fields in the _customer.txt file
+
+
+You can query the custom properties like this:
+
+SELECT
+  JSON_EXTRACT_SCALAR(custom_properties,"$.someProperty"),
+  *
+FROM
+  `[customer table location].companies`
+
+IMPORTANT: always evaluate the custom properties to see if they can be used to solve a problem.
+
+
+
+____________________________________________________________________________________________________________________________________
+
+
+The table "events"
+
+Events represent any activities performed by or by a contact or company. Each event is identified by a timestamp and/or associated with a contact or company. 
+Some events are anonymous, meaning the contact or company performing it is unknown. 
+Other events, we may know only the company involved but not the specific contact. Events come in two classes: activities and exposures.
+- Activities are actions performed by someone.
+- Exposures are actions performed towards someone i.e. an ad was served but no-one actively did something.
+
+In the table events are grouped in sessions. You can isolate the sessions by only looking at the rows where the field dd_event_session_order is 1
+
+You can find information about the session by looking inside the session grouping. 
+
+Information about the individual event is inside the event grouping
+
+In the section called stages you can see the stages that the company reached after doing the event.
+
+event.content_category: in this field we categorize pages into content categories. It can be useful for finding types of content. The actual categories are found in the _customer.txt document
+
+signals: In this array we store "signals" that this event is defined as (eg the signal "looked at docs" is equivalent to doing the page_view event with some specific URLs). The signals you can use are in the _customer.txt document
+
+
+example questions
+
+QUESTION
+How many companies viewed the pricing page last month
+
+ANSWER
+SELECT
+  count (DISTINCT dd_company_id)
+FROM
+  `[customer table location].events`
+WHERE
+  lower(event_name) = "page_view"
+  AND LOWER(event.url_clean) LIKE "%pricing%"
+  AND timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+
+
+QUESTION
+How many companies viewed the pricing page last month where the company came from paid search
+
+ANSWER
+SELECT
+  count (DISTINCT dd_company_id)
+FROM
+  `[customer table location].events`
+WHERE
+  lower(event_name) = lower("page_view")
+  AND LOWER(event.url_clean) LIKE "%pricing%"
+  AND LOWER(session.channel) LIKE "%paid%"
+  AND timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+
+
+QUESTION
+How many companies viewed the pricing page in Q4 2024 and then went on to become newbiz
+
+ANSWER
+SELECT
+  COUNT(DISTINCT dd_company_id),
+  COUNT(DISTINCT CASE WHEN stage.name = "NewBiz" THEN dd_company_id END) AS didNewbiz
+FROM
+    `[customer table location].events` as e
+LEFT JOIN UNNEST(stages) AS stage
+WHERE
+  lower(event_name) = lower("page_view")
+  AND LOWER(event.url_clean) LIKE "%pricing%" and
+  e.timestamp >= '2024-10-01'
+  AND e.timestamp < '2025-01-01'
+
+
+QUESTION
+how many companies were on our website last month?
+
+ANSWER
+SELECT
+  COUNT(DISTINCT dd_company_id)
+FROM
+  `[customer table location].events`
+WHERE
+  timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+  AND event_name = "page_view"
+
+
+QUESTION
+how many companies did demobooked last month?
+
+ANSWER
+SELECT
+  COUNT(DISTINCT dd_company_id)
+FROM
+  `[customer table location].events`
+WHERE
+  timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+  AND LOWER(event_name) = LOWER("demobooked")
+
+
+CAUTION: when querying for specific events make sure to make events case neutral.
+eg: ...WHERE LOWER(event_name) = LOWER([USER event input])
+ALWAYS DO THIS
+
+CAUTION: INFLUENCED VALUE
+when asked about influenced or touched value take care to not accidentally over state it.
+
+BAD - DON'T DO THIS
+SELECT
+  COUNT(DISTINCT e.dd_company_id) AS companies,
+  COUNT(DISTINCT e.dd_contact_id) AS contacts,
+  COUNT(DISTINCT e.dd_event_id) AS events,
+  COUNT(DISTINCT s_NewBiz.dd_stage_id) AS influenced_NewBiz_deals,
+  SUM(s_NewBiz.value) AS influenced_NewBiz_value,
+  COUNT(DISTINCT s_Closed_Lost.dd_stage_id) AS influenced_Closed_Lost_deals,
+  COUNT(DISTINCT s_Current_Sales_Pipeline.dd_stage_id) AS influenced_Current_Sales_Pipeline_deals,
+  COUNT(DISTINCT s_MQL.dd_stage_id) AS influenced_MQL_deals
+FROM
+  `my-project-29736test.dreamdata_demo.events` e
+LEFT JOIN
+  UNNEST(e.stages) AS s_NewBiz
+ON
+  s_NewBiz.name = 'NewBiz'
+LEFT JOIN
+  UNNEST(e.stages) AS s_Closed_Lost
+ON
+  s_Closed_Lost.name = 'Closed Lost'
+LEFT JOIN
+  UNNEST(e.stages) AS s_Current_Sales_Pipeline
+ON
+  s_Current_Sales_Pipeline.name = 'Current Sales Pipeline'
+LEFT JOIN
+  UNNEST(e.stages) AS s_MQL
+ON
+  s_MQL.name = 'MQL'
+WHERE
+  1=1
+  AND e.timestamp >= TIMESTAMP('2025-01-01')
+  AND e.timestamp < TIMESTAMP('2026-01-01')
+  AND e.event_name IN ('requestDemo')
+
+GOOD - DO THIS:
+SELECT
+  COUNT(DISTINCT e.dd_company_id) AS companies,
+  COUNT(DISTINCT e.dd_contact_id) AS contacts,
+  COUNT(DISTINCT e.dd_event_id) AS events,
+  COUNT(DISTINCT s_NewBiz.dd_stage_id) AS influenced_NewBiz_deals,
+  SUM(s_NewBiz.value) AS influenced_NewBiz_value,
+  COUNT(DISTINCT s_Closed_Lost.dd_stage_id) AS influenced_Closed_Lost_deals,
+  COUNT(DISTINCT s_Current_Sales_Pipeline.dd_stage_id) AS influenced_Current_Sales_Pipeline_deals,
+  COUNT(DISTINCT s_MQL.dd_stage_id) AS influenced_MQL_deals
+FROM
+  `my-project-29736test.dreamdata_demo.events` e
+LEFT JOIN
+  UNNEST(e.stages) AS s_NewBiz
+ON
+  s_NewBiz.name = 'NewBiz'
+LEFT JOIN
+  UNNEST(e.stages) AS s_Closed_Lost
+ON
+  s_Closed_Lost.name = 'Closed Lost'
+LEFT JOIN
+  UNNEST(e.stages) AS s_Current_Sales_Pipeline
+ON
+  s_Current_Sales_Pipeline.name = 'Current Sales Pipeline'
+LEFT JOIN
+  UNNEST(e.stages) AS s_MQL
+ON
+  s_MQL.name = 'MQL'
+WHERE
+  1=1
+  AND e.timestamp >= TIMESTAMP('2025-01-01')
+  AND e.timestamp < TIMESTAMP('2026-01-01')
+  AND e.event_name IN ('requestDemo')
+
+____________________________________________________________________________________________________________________________________
+
+
+The table "attribution"
+
+
+Purpose: The attribution table is used to determine the value of individual "touches". A touch is a session. So in this table you only have the sessions (not the events).
+
+Attribution calculations are done on the individual stage journeys. Meaning that there is an attribution value for each attribution model for each stage. Each attribution model is applied to the same journey, but may exclude different sessions based on the setting of the individual attribution model. Attribution is always done on session level, as attribution is an acquisition channel analysis.
+
+Attribution is most of the time about assigning credit to channels, sources, campaigns - places people came from.
+
+In our attribution table each touch is associated with any stages it might have impacted and then a weight is provided by the actual attribution model. The names of the attribution models available for the ustomer are in the _customer.txt file.
+Always retain spelling and casing when retrieving data from the customer.txt
+
+CAUTION: in attribution there are always two dates. When the session happened. And when the company reached the stage. For performance type questions (something happened, what did this turn into? you should focus on the date of the session. For attribution type questions (we had a result - eg some newbiz - where did that come from?) you should focus on the date of the company reaching the stage.
+
+CAUTION: when selecting the correct stage you must reference stage.name. Do not reference stage_name
+
+CAUTION: in the attribution table never sum across stages or attribution models
+
+
+QUESTION
+Which channels impacted new biz in 2024
+
+ANSWER
+SELECT
+    session.channel,
+    sum(a.weight) deals,
+    sum(a.value) value
+FROM
+    [customer table location].attribution AS r,
+    UNNEST(attribution) AS a
+WHERE
+    a.model = [name of selected attribution model - if nothing mentioned go with data driven - you must look up the actual name in the customer.txt - if it's available in the customer.txt]
+    AND r.stage.name = [name of selected stage model -'NewBiz' here]
+    AND  stage.timestamp >= TIMESTAMP("2024-01-01")
+    AND  stage.timestamp < TIMESTAMP("2025-01-01")
+group by 1
+order by 2 desc
+
+
+QUESTION
+what was the contribution of marketing to pipeline in 2024
+
+ANSWER
+SELECT
+    sum(a.weight) deals,
+    sum(a.value) value
+FROM
+    [customer table location].attribution AS r,
+    UNNEST(attribution) AS a
+WHERE
+    a.model = [name of selected attribution model - if nothing mentioned go with data driven - you must look up the actual name in the customer.txt - if it's available in the customer.txt]
+    AND r.stage.name = [name of selected stage model -'SQL' here]
+    AND stage.timestamp >= TIMESTAMP("2024-01-01")
+    AND stage.timestamp < TIMESTAMP("2025-01-01")
+    AND session.channel in ([list of channels you think are marketing])
+
+
+QUESTION:
+Show me the monthly performance of the Paid Search channel for this year. I want to see the number of sessions, users, influenced MQL deals, and the value of those deals.
+
+ANSWER
+WITH
+  MonthlySessionAndUserCounts AS (
+    -- This CTE calculates the monthly unique sessions and users from Paid Search.
+    SELECT
+      DATE_TRUNC(DATE(timestamp), MONTH) AS month,
+      COUNT(DISTINCT dd_session_id) AS paid_search_sessions,
+      COUNT(DISTINCT dd_visitor_id) AS user_count
+    FROM
+      `[customer table location].events`
+    WHERE
+      session.channel = 'Paid Search'
+      AND timestamp >= '2025-01-01'
+    GROUP BY
+      1
+  ),
+  MonthlyInfluencedMQLs AS (
+    -- This CTE calculates the monthly count and value of unique MQL deals influenced by Paid Search.
+    -- The subquery finds deals that are unique within each month before the final monthly aggregation.
+    SELECT
+      month,
+      COUNT(dd_stage_id) AS mql_deal_count,
+      SUM(value) AS mql_deal_value
+    FROM
+      (
+        SELECT DISTINCT
+          DATE_TRUNC(DATE(e.timestamp), MONTH) AS month,
+          s.dd_stage_id,
+          s.value
+        FROM
+          `[customer table location].events` AS e,
+          UNNEST(e.stages) AS s
+        WHERE
+          e.session.channel = 'Paid Search'
+          AND e.timestamp >= '2025-01-01'
+          AND s.name = 'MQL'
+      )
+    GROUP BY
+      1
+  )
+-- The final query joins the monthly data together.
+-- A FULL OUTER JOIN ensures no month is missed if it has data in one CTE but not the other.
+SELECT
+  COALESCE(msauc.month, mim.month) AS month,
+  COALESCE(msauc.paid_search_sessions, 0) AS paid_search_sessions,
+  COALESCE(msauc.user_count, 0) AS user_count,
+  COALESCE(mim.mql_deal_count, 0) AS influenced_mql_deals,
+  ROUND(COALESCE(mim.mql_deal_value, 0), 2) AS influenced_mql_value_EUR
+FROM
+  MonthlySessionAndUserCounts msauc
+  FULL OUTER JOIN
+    MonthlyInfluencedMQLs mim
+    ON msauc.month = mim.month
+ORDER BY
+  month ASC
+
+
+
+CAUTION: using the right date
+Using the First Touch model, which campaigns drove the most MQLs this year?
+In this questoin it is extremely important to use the right date field: the field on the stage!
+You are looking at MQLs for this year and trying to see where they came from.
+
+WRONG:
+SELECT
+  r.session.campaign,
+  ROUND(SUM(a.weight), 2) AS attributed_mqls
+FROM
+  `my-project-29736test.dreamdata_demo.attribution` AS r,
+  UNNEST(r.attribution) AS a
+WHERE
+  a.model = 'First Touch'
+  AND r.stage.name = 'MQL'
+  AND r.timestamp >= TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), YEAR))
+  AND r.timestamp < TIMESTAMP(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), YEAR), INTERVAL 1 YEAR))
+  AND r.session.campaign IS NOT NULL
+GROUP BY
+  r.session.campaign
+ORDER BY
+  attributed_mqls DESC
+
+RIGHT
+SELECT
+  r.session.campaign,
+  ROUND(SUM(a.weight), 2) AS Attributed_MQLs,
+FROM
+  `my-project-29736test.dreamdata_demo.attribution` AS r,
+  UNNEST(r.attribution) AS a
+WHERE
+  a.model = 'First Touch'
+  AND r.stage.name = 'MQL'
+  AND r.stage.timestamp >= TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), YEAR))
+  AND r.stage.timestamp < TIMESTAMP(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), YEAR), INTERVAL 1 YEAR))
+  AND r.session.campaign IS NOT NULL
+GROUP BY
+  r.session.campaign
+ORDER BY
+  Attributed_MQLs DESC
+
+
+
+
+____________________________________________________________________________________________________________________________________
+
+The table "spend"
+
+
+Purpose: Contains spend data imported through native integrations and direct uploads.
+
+Spend is not trackable at a contact or company level, but can be connected to events via channel, source, campaign, and time in order to create reporting on activities connected to the spend.
+
+Includes spend data both through native integrations with ad platforms and through direct uploads. Applies standardizing between different formats to create easy reporting.
+All costs are recorded in the currency set in the Dreamdata platform.
+
+CAUTION: when using the spend table to join with other tables you must do COALESCE(adNetwork, source) AS source when joining on source
+
+QUESTION:
+How much did I spend in total in May 2025
+
+ANSWER
+SELECT
+  SUM(cost) AS Cost,
+  SUM(impressions) AS Impressions,
+  SUM(clicks) AS Clicks
+FROM
+  `[customer table location].spend`
+WHERE
+  timestamp >= '2025-05-01'AND timestamp < '2025-06-01'
+
+
+QUESTION:
+How much did I spend on different ad networks in May 2025
+
+
+ANSWER
+SELECT
+  adNetwork AS Channel,
+  SUM(cost) AS Cost,
+  ROUND(SUM(cost) / SUM(SUM(cost)) OVER () * 100, 2) AS Percentage
+FROM
+  `[customer table location].spend`
+WHERE
+  timestamp >= '2025-05-01' AND timestamp < '2025-06-01'
+GROUP BY
+  adNetwork
+
+____________________________________________________________________________________________________________________________________
+
+
+ROI type questions
+
+They require joining across tables. The investment side of ROI lives in the spend table and the return side can be found in the attribution table.
+When calculating ROI the fundamental formula is return/investment. This gives a number. If the number is less than one you are spending more than you are getting (=negative ROI).
+
+ROI questions must always be a true funnel where you join the cost with the return. Notice how the performance is joined onto the spend using day, source, and channel.
+If you answer this type of question with out joining you are doing it wrong!
+
+CAUTION: when using the attribution table for ROI there are always two dates. When the session happened. And when the company reached the stage. You should join on the time of the session.
+
+CAUTION: when comparing ROI over time consider that later campaigns have had less time to generate returns meaning that they will always look worse. For these purposes cap the length of the funnel to make things comparable. Only cap the funnel length when comparing over time.
+
+CAUTION: Do not use time caps for single period ROI questions like "What was the ROI of our Facebook ads last quarter in terms of NewBiz value?"
+
+
+QUESTION
+what was the ROI in terms of pipeline generated of channels and sources last year?
+
+ANSWER
+WITH spend AS (
+  SELECT
+    channel,
+    COALESCE(adNetwork, source) AS source,
+    DATE(timestamp) AS day,
+    SUM(cost) AS total_cost,
+    SUM(impressions) AS impressions
+  FROM `[customer table location].spend`
+  GROUP BY 1, 2, 3
+),
+performance AS (
+  SELECT
+    session.channel,
+    session.source,
+    DATE(timestamp) AS day,
+    SUM(CASE WHEN stage.name = "SQL" THEN a.weight ELSE 0 END) AS sql_attributed_deals_unbounded,
+    SUM(CASE WHEN stage.name = "SQL" THEN a.value ELSE 0 END) AS sql_attributed_revenue_unbounded,
+    #capped funnel to compare over time - here set to 90 days
+    SUM(CASE WHEN stage.name = "SQL" and  datetime_diff(stage.timestamp,timestamp, day) <= 90 THEN a.weight ELSE 0 END) AS sql_attributed_deals_90days,
+    SUM(CASE WHEN stage.name = "SQL" and  datetime_diff(stage.timestamp,timestamp, day) <= 90 THEN a.value ELSE 0 END) AS sql_attributed_revenue_90days,
+  FROM `[customer table location].attribution`, UNNEST(attribution) AS a
+  WHERE a.model = "Data-Driven"
+    AND stage.name IN ("SQL")
+  GROUP BY 1, 2, 3
+),
+daily_roi AS (
+  SELECT
+    s.*,
+    p.sql_attributed_revenue_unbounded,
+    p.sql_attributed_deals_unbounded,
+    p.sql_attributed_revenue_90days,
+    p.sql_attributed_deals_90days,
+  FROM spend AS s
+  LEFT JOIN performance AS p
+    ON lower(s.channel) = lower(p.channel) AND lower(s.source) = lower(p.source) AND s.day = p.day
+)
+SELECT
+  channel,
+  source,
+  ROUND(SUM(total_cost), 1) AS cost,
+  ROUND(SUM(impressions), 1) AS impressions,
+  ROUND(SUM(sql_attributed_revenue_unbounded), 1) AS attributed_sql,
+  ROUND(SUM(sql_attributed_deals_unbounded), 1) AS attributed_sql_deals,
+  ROUND(SAFE_DIVIDE(SUM(sql_attributed_revenue_unbounded), SUM(total_cost)), 1) AS pipeline_roi,
+  ROUND(SAFE_DIVIDE(SUM(total_cost), NULLIF(SUM(sql_attributed_deals_unbounded), 0)), 1) AS cost_per_sql
+FROM daily_roi
+WHERE day >= "2024-01-01" AND day < "2025-01-01"
+GROUP BY 1, 2
+
+
+
+QUESTION
+how has the roi of google paid search changed beginning of 2024 to now?
+
+ANSWER
+WITH spend AS (
+  SELECT
+    DATE_TRUNC(DATE(timestamp), MONTH) AS month,
+    SUM(cost) AS total_cost
+  FROM
+    `[customer table location].spend`
+  WHERE
+    channel = 'Paid Search' AND adNetwork = 'Google'
+    AND timestamp >= '2024-01-01' AND timestamp < '2025-06-15'
+  GROUP BY 1
+),
+performance AS (
+  SELECT
+    DATE_TRUNC(DATE(timestamp), MONTH) AS month,
+    SUM(CASE WHEN DATETIME_DIFF(stage.timestamp, timestamp, DAY) <= 90 THEN a.value ELSE 0 END) AS attributed_revenue_90_days
+  FROM
+    `[customer table location].attribution`, UNNEST(attribution) AS a
+  WHERE
+    a.model = 'Data-Driven'
+    AND stage.name = 'NewBiz'
+    AND session.channel = 'Paid Search'
+    AND LOWER(session.source) = 'google'
+    AND timestamp >= '2024-01-01' AND timestamp < '2025-06-15'
+    AND stage.timestamp >= '2024-01-01'
+  GROUP BY 1
+),
+monthly_roi AS (
+  SELECT
+    s.month,
+    s.total_cost,
+    p.attributed_revenue_90_days
+  FROM
+    spend AS s
+  LEFT JOIN
+    performance AS p ON s.month = p.month
+)
+SELECT
+  month,
+  ROUND(total_cost, 2) AS cost,
+  ROUND(attributed_revenue_90_days, 2) AS attributed_newbiz_value_90_day_cap,
+  ROUND(SAFE_DIVIDE(attributed_revenue_90_days, total_cost), 2) AS roi_90_day_cap
+FROM
+  monthly_roi
+ORDER BY
+  month ASC
+
+____________________________________________________________________________________________________________________________________
+
+
+CAUTION: Date intervals
+
+Date intervals can be tricky. You will get a lot of questions about date intervals. Here are some examples on how to handle them. 
+
+"Q4 2024" =
+WHERE
+  timestamp >= '2024-10-01'
+  AND timestamp < '2025-01-01'
+
+"last month"=
+WHERE
+  timestamp >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
+
+"this quarter" or "current quarter"
+WHERE
+  timestamp >= TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))
+  AND timestamp < TIMESTAMP(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 3 MONTH))
+
+
+"last 24 months"
+GOOD
+  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH))
+  AND s.timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+BAD
+  AND timestamp >= TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH), INTERVAL 24 MONTH)
+  AND timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+
+
+____________________________________________________________________________________________________________________________________
+
+CAUTION date errors to avoid
+
+TIMESTAMP_SUB does not support the MONTH date part when the argument is TIMESTAMP type
+
+Take extra care around timestamp functions where you often make mistakes. Take care to avoid this: TIMESTAMP_ADD does not support the QUARTER date part when the argument is TIMESTAMP type
+
+____________________________________________________________________________________________________________________________________
+
+CAUTION: Ambiguous Column Names
+
+When a query involves a JOIN or UNNEST where multiple tables or records share a column name (a common example is timestamp), you must prefix the column with its table name or alias to avoid ambiguity errors.
+
+For example, the events table has a timestamp, and the stages record within it also has a timestamp. A query that unnests stages must specify which timestamp it is referring to.
+
+Incorrect (causes ambiguity error):
+
+SQL
+
+SELECT
+  e.dd_event_id
+FROM
+  `...events` AS e,
+  UNNEST(e.stages) AS s
+WHERE
+  timestamp >= '2024-01-01' -- ERROR: 'timestamp' could be e.timestamp or s.timestamp
+
+
+Correct (avoids ambiguity):
+
+SQL
+
+SELECT
+  e.dd_event_id
+FROM
+  `...events` AS e,
+  UNNEST(e.stages) AS s
+WHERE
+  e.timestamp >= '2024-01-01' -- CORRECT: The column is qualified with the table alias 'e'
+
+____________________________________________________________________________________________________________________________________
+
+
+DISAMBIGUATION
+
+sessions, touches, events, stages
+
+To ensure queries are built on a correct and shared understanding of user activity, the following terms must be interpreted strictly according to these definitions:
+
+Event: This is the most granular action tracked. It is a single row in the events table, such as a page_view or a form_submit. It is uniquely identified by dd_event_id.
+
+Session / Touch: These two terms are synonymous and must be used interchangeably. A session (or touch) represents a single period of user interaction, which contains one or more events. It is identified by the dd_session_id in the events table. For example, a single session can contain multiple events (e.g., three page views and one click).
+
+CRITICAL: When asked to count "touches" or "sessions" from a channel or of a certain type, the query must count the DISTINCT dd_session_id from the events table or use dd_event_session_order = 1. It must not count events (dd_event_id).
+
+Stage: This is a significant milestone achieved by a contact or company in their journey, such as 'MQL' or 'NewBiz'. Stages are found in the stages table and are linked to events that influence them in the events.stages array.
+
+
+
+____________________________________________________________________________________________________________________________________
+
+
+Calculating Journey Length to a Specific Stage
+
+PURPOSE: To calculate the average journey length from the first influencing event to a specific stage. This is useful for understanding the "time to conversion" for prospects who have already shown intent by entering a specific stage journey.
+
+CAUTION: This method defines the start of the journey as the first event that influenced the target stage, not the company's absolute first recorded event. This will typically result in a shorter journey duration than a "first-touch-to-conversion" analysis.
+
+QUESTION:
+What was the average time to NewBiz in 2025?
+
+ANSWER:
+SELECT
+  AVG(journey_length) AS average_journey_days
+FROM (
+  SELECT
+    e.dd_company_id,
+    TIMESTAMP_DIFF(MAX(s.timestamp), MIN(e.timestamp), DAY) AS journey_length
+  FROM
+    `[customer table location].events` AS e,
+    UNNEST(e.stages) AS s
+  WHERE
+    s.name = [Insert appropriate name based on customer_stages document]
+    AND s.timestamp >= '2025-01-01'
+    AND s.timestamp < '2026-01-01'
+  GROUP BY
+    e.dd_company_id
+)
+
+____________________________________________________________________________________________________________________________________
+
+CAUTION when using unnest
+
+Do not accidentally give the unnested fields the same name as the table as this will not work
+
+This will not work:
+  FROM
+    `[customer table location].attribution` AS attribution,
+    UNNEST(attribution) AS a
+
+
+This will work:
+  FROM
+    `[customer table location].attribution` AS s,
+    UNNEST(attribution) AS a
+
+
+____________________________________________________________________________________________________________________________________
+
+IMPORTANT when your SQL is using aggregated columns in the final output
+
+You must give them a name
+
+Bad:  COUNT(DISTINCT c.properties.name)
+Good:  COUNT(DISTINCT c.properties.name) as Companies
+
+bad:   COUNT(DISTINCT dd_stage_id)
+good :   COUNT(DISTINCT dd_stage_id) as Newbiz_deals
+
+
+
+____________________________________________________________________________________________________________________________________
+
+CAUTION: Interpreting Vague Categories
+
+When the user asks about a broad category like "marketing", "sales", or "advertising", you MUST NOT simply query all data. You must first reason about which channels define that category.
+
+1.  Look at the list of available channels in the `CHANNELS` section of the `_customer.txt` document.
+2.  Identify the specific channels that belong to the user's category. For example, 'Paid Search', 'Organic Social', 'Emails', 'Paid Social', 'Webinar', etc., are all "marketing" channels. "Sales" and "Customer Success" are not.
+3.  Construct a `WHERE session.channel IN (...)` clause in your SQL query to filter for ONLY those specific channels.
+
+Example: For the question "what was the contribution of marketing...", the query MUST include a filter like:
+WHERE session.channel IN (channels you think are marketing)
+
+
+____________________________________________________________________________________________________________________________________
+
+IMPORTANT currency: when a number is a currency it is always in the currency specified in the customer.txt file
+
+
+____________________________________________________________________________________________________________________________________
+
+CAUTION: Formatting Numerical Output
+
+All numerical results in the final SELECT statement must be properly formatted for readability.
+
+- For any aggregated values (using SUM, AVG, etc.), always wrap the calculation in the `ROUND()` function. You can round to 2 decimal places.
+- For integer counts (using COUNT), you do not need to round.
+
+Example:
+
+Bad:  SUM(a.value) AS total_value
+Good: ROUND(SUM(a.value), 2) AS total_value
+
+Bad:  SAFE_DIVIDE(SUM(a.value), SUM(b.cost))
+Good: ROUND(SAFE_DIVIDE(SUM(a.value), SUM(b.cost)), 2) AS roi
+
+____________________________________________________________________________________________________________________________________
+
+
+CAUTION: INFLUENCED value vs ATTRIBUTED value
+
+when you are looking at the deals impacted by a session you can either use an attribution model to get attributed deals and value or do a more simple conversion logic called touched revenue and touched deals
+
+QUESTION
+how much newbiz revenue and how may newbiz deals were touched (influenced) by paid search happening in 2024?
+
+ANSWER
+SELECT
+  count (DISTINCT dd_stage_id),
+  SUM(value)
+FROM (
+  SELECT
+    dd_stage_id,
+    AVG(value) value
+  FROM
+    `[customer table location].events` AS e,
+    UNNEST (stages) AS s
+  WHERE
+    e.timestamp >= TIMESTAMP("2024-01-01")
+    AND e.timestamp < TIMESTAMP("2025-01-01")
+    AND session.channel = "Paid Search"
+    AND dd_event_session_order = 1
+    AND s.name = "NewBiz"
+  GROUP BY
+    1 )
+
+QUESTION
+how much newbiz revenue was attributed to paid search happening in 2024?
+
+ANSWER
+SELECT
+  ROUND(SUM(a.value), 2) AS attributed_newbiz_revenue
+FROM
+  `[customer table location].attribution` AS r,
+  UNNEST(attribution) AS a
+WHERE
+  a.model = 'Data-Driven'
+  AND r.stage.name = 'NewBiz'
+  AND r.session.channel = 'Paid Search'
+  AND r.timestamp >= TIMESTAMP("2024-01-01")
+  AND r.timestamp < TIMESTAMP("2025-01-01")

@@ -1,0 +1,174 @@
+[
+  {
+    "name": "dd_contact_id",
+    "type": "STRING",
+    "description": "Unique identifier for the contact within Dreamdata. An anonymized hash or the email. (Primary key)"
+  },
+  {
+    "name": "email",
+    "type": "STRING",
+    "description": "Contact's primary email address. (Primary key)"
+  },
+  {
+    "name": "properties",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "created_date",
+        "type": "TIMESTAMP",
+        "description": "Date when the contact record was created"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Contact's full name"
+      },
+      {
+        "name": "first_name",
+        "type": "STRING",
+        "description": "Contact's first name"
+      },
+      {
+        "name": "last_name",
+        "type": "STRING",
+        "description": "Contact's last name"
+      },
+      {
+        "name": "phone_number",
+        "type": "STRING",
+        "description": "Contact's phone number"
+      },
+      {
+        "name": "title",
+        "type": "STRING",
+        "description": "Contact's job title"
+      },
+      {
+        "name": "role",
+        "type": "STRING",
+        "description": "Contact's professional role."
+      },
+      {
+        "name": "seniority",
+        "type": "STRING",
+        "description": "Contact's seniority level"
+      },
+      {
+        "name": "country",
+        "type": "STRING",
+        "description": "Contact's primary country"
+      },
+      {
+        "name": "email_domain",
+        "type": "STRING",
+        "description": "Domain name of the contact's email address"
+      },
+      {
+        "name": "additional_emails",
+        "type": "STRING",
+        "mode": "REPEATED",
+        "description": "List of additional email addresses associated with the contact. Only used if the primary CRM supports additional emails"
+      },
+      {
+        "name": "is_corporate_email",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the email address belongs to a corporate/business domain. False will indicate that it is a free email domain like gmail, hotmail etc."
+      },
+      {
+        "name": "is_from_primary_crm",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the record originated from the primary CRM system"
+      }
+    ],
+    "description": "Record containing contact properties. The properties are combined from the different source integrations using waterfall enrichment prioritizing 1. The primary CRM 2. Other integrations including active intent providers 3. Dreamdata's proprietary AI enrichment and labeling."
+  },
+  {
+    "name": "source_system",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Id for the object record in the source system. This will not necessarily match the 'dd_' id, but is useful for locating records in the source systems directly"
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Name of the source system like hubspot, salesforce, etc."
+      },
+      {
+        "name": "object",
+        "type": "STRING",
+        "description": "The name of the object in the source system like contacts, leads, etc."
+      }
+    ],
+    "description": "Array containing the source systems in which the contact was found."
+  },
+  {
+    "name": "custom_properties",
+    "type": "JSON",
+    "description": "Custom contact properties in JSON format. These are the selected properties from the primary CRM. Which properties are included is controlled through the Dreamdata source UI"
+  },
+  {
+    "name": "companies",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_company_id",
+        "type": "STRING",
+        "description": "Id for the company (foreign key referencing dd_company_id in the company schema)"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Company name"
+      },
+      {
+        "name": "domain",
+        "type": "STRING",
+        "description": "Company domain"
+      },
+      {
+        "name": "is_primary_company",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the company is the primary company associated with the contact. The primary company is used when stages are only associated with a contact. Then it will automatically be associated with the primary company for conversion rate calculations"
+      }
+    ],
+    "description": "Array containing all of the companies associated with the contact"
+  },
+  {
+    "name": "audiences",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_audience_id",
+        "type": "STRING",
+        "description": "Id of the audience within the Dreamdata platform. This uniquely defines the audience"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the audience"
+      },
+      {
+        "name": "created_date",
+        "type": "TIMESTAMP",
+        "description": "Date for the creation of the audience"
+      },
+      {
+        "name": "description",
+        "type": "STRING",
+        "description": "Description of the audience given within the Dreamdata UI."
+      }
+    ],
+    "description": "Array containing the audiences the contact is part of. Audiences can be defined using the no-code audience builder in the Dreamdata UI and will be automatically updated."
+  },
+  {
+    "name": "row_checksum",
+    "type": "STRING",
+    "description": "Checksum for the row. If any value in the row changes, the checksum changes otherwise it is unchanged. This should only be used to setup incremental table updates."
+  }
+]

@@ -1,0 +1,159 @@
+[
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "description": "Date and time the cost was incurred"
+  },
+  {
+    "name": "cost",
+    "type": "FLOAT",
+    "description": "Amount recorded in the currency set in the Dreamdata platform."
+  },
+  {
+    "name": "impressions",
+    "type": "FLOAT",
+    "description": "Number of ad impressions."
+  },
+  {
+    "name": "clicks",
+    "type": "FLOAT",
+    "description": "Number of ad clicks."
+  },
+  {
+    "name": "adNetwork",
+    "type": "STRING",
+    "description": "Name of the advertising network used like 'Google', 'LinkedIn' etc"
+  },
+  {
+    "name": "channel",
+    "type": "STRING",
+    "description": "Channel referencing the session channel in events table. This can be used to match spend to activity."
+  },
+  {
+    "name": "source",
+    "type": "STRING",
+    "description": "Source referencing the session source in events table. This can be used to match spend to activity."
+  },
+  {
+    "name": "ad_account",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Unique identifier for the ad account within the network"
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the ad account"
+      }
+    ],
+    "description": "Record containing information about the ad account used for the spend"
+  },
+  {
+    "name": "ad_hierarchy",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "level_1",
+        "type": "RECORD",
+        "fields": [
+          {
+            "name": "network_label",
+            "type": "STRING",
+            "description": "Network-specific label for the first level i.e. 'campaign' for Google and Meta and 'campaign group' for LinkedIn."
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "description": "Name of the first level i.e. the name of the Google campaign."
+          },
+          {
+            "name": "id",
+            "type": "STRING",
+            "description": "Unique identifier for the first level within the network."
+          }
+        ],
+        "description": "Top level for ads on the specific network"
+      },
+      {
+        "name": "level_2",
+        "type": "RECORD",
+        "fields": [
+          {
+            "name": "network_label",
+            "type": "STRING",
+            "description": "Network-specific label for the second level i.e. 'ad group' for Google, 'ad set' for Meta and 'campaign' for LinkedIn."
+          },
+          {
+            "name": "name",
+            "type": "STRING",
+            "description": "Name of the second level i.e. the name of the Google ad group."
+          },
+          {
+            "name": "id",
+            "type": "STRING",
+            "description": "Unique identifier for the second level within the network."
+          }
+        ],
+        "description": "Second level for ads on the specific network"
+      }
+    ],
+    "description": "Record containing information about the ad hierarchy, with specific network labels and IDs: The IDs are used to match activities and ad, through things like UTM parameters of the activities"
+  },
+  {
+    "name": "context",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "campaign",
+        "type": "STRING",
+        "description": "Name of the campaign"
+      },
+      {
+        "name": "campaign_id",
+        "type": "STRING",
+        "description": "Unique identifier for the campaign within the network"
+      },
+      {
+        "name": "keyword",
+        "type": "STRING",
+        "description": "Keyword used in the ad if applicable"
+      },
+      {
+        "name": "keyword_id",
+        "type": "STRING",
+        "description": "Unique identifier for the keyword within the network."
+      },
+      {
+        "name": "match_type",
+        "type": "STRING",
+        "description": "Matching type used for the keyword if applicable"
+      }
+    ],
+    "description": "Record containing campaign and keyword parameters of the spend"
+  },
+  {
+    "name": "source_system",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "type",
+        "type": "STRING",
+        "description": "Type of data source like 'advertisement'."
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Name of the data source."
+      }
+    ],
+    "description": "Record containing information about the source of the spend data"
+  },
+  {
+    "name": "row_checksum",
+    "type": "STRING",
+    "description": "Checksum for the row. If any value in the row changes, the checksum changes otherwise it is unchanged. This should only be used to setup incremental table updates."
+  }
+]

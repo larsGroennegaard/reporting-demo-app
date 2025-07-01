@@ -1,0 +1,410 @@
+[
+  {
+    "name": "dd_event_id",
+    "type": "STRING",
+    "description": "Unique identifier for the event within the Dreamdata system. Each row has a unique value (Primary key)"
+  },
+  {
+    "name": "dd_session_id",
+    "type": "STRING",
+    "description": "Unique identifier for the session containing the event. If the session only contains one event, dd_session_id will be equal to the dd_event_id. If more events in a session, the dd_session_id will be the dd_event_id of the first event in the session."
+  },
+  {
+    "name": "event_name",
+    "type": "STRING",
+    "description": "Name of the event e.g., 'page_view', 'form_submit'"
+  },
+  {
+    "name": "timestamp",
+    "type": "TIMESTAMP",
+    "description": "Timestamp the event occurred"
+  },
+  {
+    "name": "quantity",
+    "type": "INTEGER",
+    "description": "Number of times the event was observed. 1 for most events, but exposure based events like linkedin_ad_impression will have quantity different from 1. The quantity field is used in combination with with dd_tracking_type = 'exposure', where counting the distinct dd_event_id is not sufficient to get the correct number of impressions."
+  },
+  {
+    "name": "dd_visitor_id",
+    "type": "STRING",
+    "description": "Anonymized identifier for a visitor within the Dreamdata system. For identified visitors the dd_visitor_id will be equal to the dd_contact_id. This field is used to calculate the Visitor count as COUNT( DISTINCT dd_pseudo_visitor_id)"
+  },
+  {
+    "name": "dd_contact_id",
+    "type": "STRING",
+    "description": "Unique identifier for the contact associated with the event (foreign key referencing dd_contact_id in the contacts schema)"
+  },
+  {
+    "name": "dd_company_id",
+    "type": "STRING",
+    "description": "Unique identifier for the company associated with the event (foreign key referencing dd_company_id in the company schema)"
+  },
+  {
+    "name": "dd_tracking_type",
+    "type": "STRING",
+    "description": "Tracking type of the event. 'activity': all standard events that describes an action. 'exposure': exposure based events like linkedin_ad_impression. When counting and 'activity' we can both count distinct dd_event_id or sum(quantity). For counting 'exposure' then only sum(quantity) will give the correct number"
+  },
+  {
+    "name": "dd_event_session_order",
+    "type": "INTEGER",
+    "description": "Order of the event within the session. To obtain the first event of each session use 'WHERE dd_event_session_order = 1'"
+  },
+  {
+    "name": "dd_is_primary_event",
+    "type": "BOOLEAN",
+    "description": "For contacts associated with multiple companies the events are repeated to each company associated with the contact. dd_is_primary_event is a flag to remove the repeated events and only include events for the primary company of the contact (the flag is also 'true' for events without contacts). IMPORTANT: This helper column is ONLY relevant when counting basic events i.e. counting page view events or similar. For any questions regarding stages or journeyes it should NOT be used ie. for questions involving companies, conversion, attribution or how events influenced funnel stages this field should NOT be used. "
+  },
+  {
+    "name": "event",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "url_clean",
+        "type": "STRING",
+        "description": "Cleaned URL without UTM parameters."
+      },
+      {
+        "name": "url",
+        "type": "STRING",
+        "description": "Raw URL including UTM parameters."
+      },
+      {
+        "name": "referrer_clean",
+        "type": "STRING",
+        "description": "Cleaned referrer URL without UTM parameters."
+      },
+      {
+        "name": "referrer",
+        "type": "STRING",
+        "description": "Raw referrer URL including UTM parameters."
+      },
+      {
+        "name": "utm_medium",
+        "type": "STRING",
+        "description": "UTM medium parameter. This is extracted from the url. For unified mapped field see session.medium."
+      },
+      {
+        "name": "utm_campaign",
+        "type": "STRING",
+        "description": "UTM campaign parameter. This is extracted from the url. For unified mapped field see session.campaign."
+      },
+      {
+        "name": "utm_source",
+        "type": "STRING",
+        "description": "UTM source parameter. This is extracted from the url. For unified mapped field see session.source."
+      },
+      {
+        "name": "utm_term",
+        "type": "STRING",
+        "description": "UTM term parameter. This is extracted from the url. For unified mapped field see session.term."
+      },
+      {
+        "name": "host",
+        "type": "STRING",
+        "description": "Domain of the URL where the event occurred."
+      },
+      {
+        "name": "browser",
+        "type": "STRING",
+        "description": "Browser used."
+      },
+      {
+        "name": "browser_version",
+        "type": "STRING",
+        "description": "Browser version used."
+      },
+      {
+        "name": "device",
+        "type": "STRING",
+        "description": "Device type used."
+      },
+      {
+        "name": "os",
+        "type": "STRING",
+        "description": "Operating system used."
+      },
+      {
+        "name": "os_version",
+        "type": "STRING",
+        "description": "Operating system version used."
+      },
+      {
+        "name": "campaign",
+        "type": "STRING",
+        "description": "Campaign of the event. Mapped field: This is either defined at input or mapped combining info from different fields such as utm_campaign. The campaign driving the event in an attribution context is the campaign of the session i.e. the campaign responsible for starting the session containing the event."
+      },
+      {
+        "name": "medium",
+        "type": "STRING",
+        "description": "Medium of the event. Mapped field: This is either defined at input or mapped combining info from different fields such as utm_medium."
+      },
+      {
+        "name": "term",
+        "type": "STRING",
+        "description": "Term set using a match with paid UTM parameter IDs or set using utm_term."
+      },
+      {
+        "name": "keyword",
+        "type": "STRING",
+        "description": "Keyword set using a match with paid UTM parameter IDs."
+      },
+      {
+        "name": "match_type",
+        "type": "STRING",
+        "description": "Match type e.g. 'EXACT', 'PHRASE', 'BROAD' etc."
+      },
+      {
+        "name": "content_category",
+        "type": "STRING",
+        "description": "Content category of URL associated with the event. The definitions of content categories are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "is_conversion",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the event is a conversion. The definitions of conversions are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "conversion_name",
+        "type": "STRING",
+        "description": "Name of the conversion. The definitions of conversions are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "is_single_session",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the event should be considered as a stand-alone session and not be grouped with other events into a session."
+      }
+    ],
+    "description": "Record containing detailed information about the event"
+  },
+  {
+    "name": "session",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "channel",
+        "type": "STRING",
+        "description": "Channel of the session. Mapped field: This is either defined at input or mapped combining info from different fields. This is the unified channel label used accross Dreamdata reports i.e. the channel responsible for starting the session containing the event. See Dreamdata Data Hub UI to customize mapping outside of the Dreamdata default mappings"
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Source of the session. Mapped field: This is either defined at input or mapped combining info from different fields like utm_source. This is the unified source label used accross Dreamdata reports i.e. the source responsible for starting the session containing the event. See Dreamdata Data Hub UI to customize mapping outside of the Dreamdata default mappings."
+      },
+      {
+        "name": "campaign",
+        "type": "STRING",
+        "description": "Campaign of the session. Mapped field: This is either defined at input or mapped combining info from different fields like utm_campaign. This is the unified campaign label used accross Dreamdata reports i.e. the campaign responsible for starting the session containing the event."
+      },
+      {
+        "name": "medium",
+        "type": "STRING",
+        "description": "Medium of the session. Mapped field: This is either defined at input or mapped combining info from different fields."
+      },
+      {
+        "name": "term",
+        "type": "STRING",
+        "description": "Term of the session, set using a match with paid UTM parameter IDs or set using utm_term."
+      },
+      {
+        "name": "keyword",
+        "type": "STRING",
+        "description": "Keyword of the session, set using a match with paid UTM parameter IDs."
+      },
+      {
+        "name": "match_type",
+        "type": "STRING",
+        "description": "Match type e.g. 'EXACT', 'PHRASE', 'BROAD' etc"
+      },
+      {
+        "name": "landing_page",
+        "type": "STRING",
+        "description": "Landing page URL of the session without UTM parameters."
+      },
+      {
+        "name": "landing_page_url",
+        "type": "STRING",
+        "description": "Raw landing page URL of the session including UTM parameters."
+      },
+      {
+        "name": "landing_page_content_category",
+        "type": "STRING",
+        "description": "Content category of the landing page URL of the session. The definitions of content categories are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "host",
+        "type": "STRING",
+        "description": "Domain of the landing page URL of the session."
+      },
+      {
+        "name": "referrer_clean",
+        "type": "STRING",
+        "description": "Cleaned referrer URL of the session without UTM parameters."
+      },
+      {
+        "name": "referrer",
+        "type": "STRING",
+        "description": "Raw referrer URL of the session including UTM parameters."
+      },
+      {
+        "name": "browser",
+        "type": "STRING",
+        "description": "Browser used to start the session."
+      },
+      {
+        "name": "device",
+        "type": "STRING",
+        "description": "Device type used to start the session."
+      },
+      {
+        "name": "os",
+        "type": "STRING",
+        "description": "Operating system used to start the session."
+      },
+      {
+        "name": "first_event_name",
+        "type": "STRING",
+        "description": "Name of the first event in the session."
+      },
+      {
+        "name": "contain_conversion",
+        "type": "BOOLEAN",
+        "description": "Flag indicating if the session contains an event labeled as a conversion. The definitions of conversions are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "first_conversion_name",
+        "type": "STRING",
+        "description": "Name of the first conversion in the session. The definitions of conversions are setup using the Dreamdata Data Hub UI"
+      },
+      {
+        "name": "ad_hierarchy",
+        "type": "RECORD",
+        "fields": [
+          {
+            "name": "level_1",
+            "type": "RECORD",
+            "fields": [
+              {
+                "name": "network_label",
+                "type": "STRING",
+                "description": "Network-specific label for the first level i.e. 'campaign' for Google and Meta and 'campaign group' for LinkedIn."
+              },
+              {
+                "name": "name",
+                "type": "STRING",
+                "description": "Name of the first level i.e. the name of the Google campaign."
+              },
+              {
+                "name": "id",
+                "type": "STRING",
+                "description": "Unique identifier for the first level within the network."
+              }
+            ],
+            "description": "Top level for ads on the specific network"
+          },
+          {
+            "name": "level_2",
+            "type": "RECORD",
+            "fields": [
+              {
+                "name": "network_label",
+                "type": "STRING",
+                "description": "Network-specific label for the second level i.e. 'ad group' for Google, 'ad set' for Meta and 'campaign' for LinkedIn."
+              },
+              {
+                "name": "name",
+                "type": "STRING",
+                "description": "Name of the second level i.e. the name of the Google ad group."
+              },
+              {
+                "name": "id",
+                "type": "STRING",
+                "description": "Unique identifier for the second level within the network."
+              }
+            ],
+            "description": "Second level for ads on the specific network"
+          }
+        ],
+        "description": "Record containing information about the ad hierarchy detected, with specific network labels and IDs: These are filled in using matches with UTM parameters of the session. The id's in this record can be connected to the similar record in the spend table."
+      }
+    ],
+    "description": "Record containing detailed information about the session which the event is part of. The session will be the same for all events in the session. Attribution is based on session parameters."
+  },
+  {
+    "name": "source_system",
+    "type": "RECORD",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Id for the event in the source system. For analytics sources this will be the message identifier."
+      },
+      {
+        "name": "source",
+        "type": "STRING",
+        "description": "Name of the source system of the event."
+      }
+    ],
+    "description": "Record containing information about the source of the data"
+  },
+  {
+    "name": "signals",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "id",
+        "type": "STRING",
+        "description": "Unique identifier for the signal."
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the signal."
+      },
+      {
+        "name": "category",
+        "type": "STRING",
+        "description": "Category of the signal."
+      },
+      {
+        "name": "used_in_engagement_score",
+        "type": "BOOLEAN",
+        "description": "Boolean flag indicating if the signal is used to calculate the Dreamdata engagement score."
+      }
+    ],
+    "description": "Array containing the signals associated with this event. The signal definitions are setup using the Dreamdata App."
+  },
+  {
+    "name": "stages",
+    "type": "RECORD",
+    "mode": "REPEATED",
+    "fields": [
+      {
+        "name": "dd_stage_id",
+        "type": "STRING",
+        "description": "Unique identifier for the individual stage influenced by the event. (foreign key referencing dd_stage_id in the stages schema)."
+      },
+      {
+        "name": "name",
+        "type": "STRING",
+        "description": "Name of the stage."
+      },
+      {
+        "name": "timestamp",
+        "type": "TIMESTAMP",
+        "description": "Timestamp when the stage was reached."
+      },
+      {
+        "name": "value",
+        "type": "FLOAT",
+        "description": "Value indicating the revenue associated with reaching the stage."
+      }
+    ],
+    "description": "Array containing the stages that are influenced by the event = where the event is part of that particular stage journey. An event cannot influence a stage reached before the timestamp of the event. This array is used for performance analysis i.e. 'what did this event lead to' or 'which funnel stage is influenced by this event'. This can be accomplished by unnesting the stages array and count distinct dd_stage_id's i.e. for how many stages (dd_stage_id) are the event part of the stage journey."
+  },
+  {
+    "name": "row_checksum",
+    "type": "STRING",
+    "description": "Checksum for the row. If any value in the row changes, the checksum changes otherwise it is unchanged. This should be only used to setup incremental table updates."
+  }
+]
