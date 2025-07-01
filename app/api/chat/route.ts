@@ -59,6 +59,9 @@ export async function POST(request: NextRequest) {
   if (!query) {
     return new NextResponse(JSON.stringify({ error: 'Query is required.' }), { status: 400 });
   }
+  
+  // THE FIX: Use the correct model name 'gemini-1.5-flash-latest'
+  const modelName = 'gemini-1.5-flash-latest';
 
   // --- Step 2: Generate Natural Language Answer ---
   if (kpiData) {
@@ -73,14 +76,13 @@ export async function POST(request: NextRequest) {
     `;
 
     try {
-      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: summaryPrompt }] }] })
       });
       const result = await response.json();
       
-      // Defensive check and logging for summary generation
       if (!result.candidates || result.candidates.length === 0) {
           console.error("Gemini summary response is missing candidates. Full response:", JSON.stringify(result, null, 2));
           throw new Error("Invalid response structure from Gemini API for summary.");
@@ -125,7 +127,7 @@ export async function POST(request: NextRequest) {
             }
         };
 
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload)
@@ -133,10 +135,8 @@ export async function POST(request: NextRequest) {
 
         const result = await response.json();
         
-        // ADDED: Log the entire Gemini response object for debugging
         console.log("Full response object from Gemini:", JSON.stringify(result, null, 2));
 
-        // ADDED: Defensive check for the candidates array
         if (!result.candidates || result.candidates.length === 0) {
             throw new Error("Invalid response structure from Gemini API. No candidates found.");
         }
