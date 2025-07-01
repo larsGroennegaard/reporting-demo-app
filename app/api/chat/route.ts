@@ -14,6 +14,36 @@ async function readAIContextFile(filename: string): Promise<string> {
   }
 }
 
+// Function to dynamically build the context for the LLM
+function buildDynamicContext(options: any): string {
+    let context = "## 3. Dynamic Value Mappings\n\n";
+    context += "Here are the available values for the filters you can use. You must use the exact string values from these lists.\n\n";
+
+    if (options.outcomes) {
+        context += `### Stage Names\n- **Available values**: ${JSON.stringify(options.outcomes)}\n`;
+        context += `- **Synonyms**: If the user says "pipeline" or "sales qualified", use the "SQL" stage. If they say "newbiz" or "won deals", use the "NewBiz" stage.\n\n`;
+    }
+    if (options.channels) {
+        context += `### Channels\n- **Available values**: ${JSON.stringify(options.channels)}\n`;
+        context += `- **Categories**: If the user says "marketing channels", use ["Paid Search", "Paid Social", "Organic Search", "Organic Social", "Emails", "Referral", "Display"]. If they say "paid channels", use ["Paid Search", "Paid Social", "Display"].\n\n`;
+    }
+    if (options.countries) {
+        context += `### Company Countries\n- **Available values**: A list of valid country names. Example: "United States", "Germany".\n\n`;
+    }
+    if (options.employeeBuckets) {
+        context += `### Employee Sizes\n- **Available values**: ${JSON.stringify(options.employeeBuckets)}\n\n`;
+    }
+     if (options.eventNames) {
+        context += `### Event Names\n- **Available values**: ${JSON.stringify(options.eventNames)}\n\n`;
+    }
+    if (options.signalNames) {
+        context += `### Signals\n- **Available values**: ${JSON.stringify(options.signalNames)}\n\n`;
+    }
+
+    return context;
+}
+
+
 export async function POST(request: NextRequest) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
@@ -32,18 +62,9 @@ export async function POST(request: NextRequest) {
     const summaryPrompt = `
       Based on the following data, provide a concise, natural language answer to the user's question.
       Keep the answer to 1-3 sentences.
-
       User's Question: "${query}"
-
-      KPI Data:
-      ${JSON.stringify(kpiData, null, 2)}
-
-      Chart/Table Data Summary:
-      The chart/table contains ${chartData?.length || 0} rows of data.
-      ${chartData?.length > 0 ? `The primary segments are: ${
-        Array.from(new Set(chartData.map((d: any) => d.segment || d.month)))
-        .slice(0, 5).join(', ')}` : ''}
-      
+      KPI Data: ${JSON.stringify(kpiData, null, 2)}
+      Chart/Table Data Summary: The chart/table contains ${chartData?.length || 0} rows of data.
       Answer:
     `;
 
@@ -56,7 +77,6 @@ export async function POST(request: NextRequest) {
       const result = await response.json();
       const answer = result.candidates[0]?.content?.parts[0]?.text || "I was unable to generate a summary for this report.";
       return NextResponse.json({ answer });
-
     } catch (error) {
       console.error("Error calling Gemini API for summary:", error);
       return new NextResponse(JSON.stringify({ error: 'Failed to generate summary.' }), { status: 500 });
@@ -66,16 +86,24 @@ export async function POST(request: NextRequest) {
   // --- Step 1: Generate Report Configuration ---
   else {
     try {
-        const configRules = await readAIContextFile('config_rules.md');
+        // Fetch all dynamic values from our config-options endpoint
+        const internalApiUrl = new URL('/api/config-options', request.url).toString();
+        const optionsResponse = await fetch(internalApiUrl, {
+            headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }
+        });
+        if (!optionsResponse.ok) throw new Error('Failed to fetch dynamic config options');
+        const dynamicOptions = await optionsResponse.json();
 
-        const systemPrompt = `
-          ${configRules}
+        // Dynamically build the context string
+        const dynamicContext = buildDynamicContext(dynamicOptions);
 
-          User's Question: "${query}"
+        const configRulesTemplate = await readAIContextFile('config_rules.md');
 
-          Now, generate the JSON configuration object that answers this question based on the rules and schemas provided above.
-        `;
-        
+        // Inject the full dynamic context into the rules template
+        const systemPrompt = configRulesTemplate
+            .replace('{{DYNAMIC_PROMPT_CONTEXT}}', dynamicContext)
+            + `\n\nUser's Question: "${query}"\n\nNow, generate the JSON configuration object that answers this question.`;
+
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -94,20 +122,9 @@ export async function POST(request: NextRequest) {
             throw new Error("AI returned malformed JSON");
         }
 
-        // Validate and sanitize the config object
-        if (!config) {
-            throw new Error("AI returned an empty config");
-        }
-
-        // Ensure kpiCardConfig is an array, even if missing
-        if (!config.kpiCardConfig || !Array.isArray(config.kpiCardConfig)) {
-            config.kpiCardConfig = [];
-        }
-
-        // Add unique IDs to the cards that were generated
-        config.kpiCardConfig.forEach((card: any, index: number) => {
-            card.id = Date.now() + index;
-        });
+        if (!config) throw new Error("AI returned an empty config");
+        if (!config.kpiCardConfig) config.kpiCardConfig = [];
+        config.kpiCardConfig.forEach((card: any, index: number) => { card.id = Date.now() + index; });
 
         return NextResponse.json({ config });
 
