@@ -36,9 +36,14 @@ Schema B: EngagementReportStateUsed for questions about user activities (e.g., "
   "segmentationProperty": "'channel' | 'companyCountry' | 'numberOfEmployees'",
   "kpiCardConfig": "{ id: number, metric: string }[]"
 }
-{{DYNAMIC_PROMPT_CONTEXT}}4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.
+{{DYNAMIC_PROMPT_CONTEXT}}
 
-Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.User Question: "what was our newbiz for 2025"BAD JSON Output:{
+4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.
+
+Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.
+
+User Question: "what was our newbiz for 2025"
+BAD JSON Output:{
     "reportFocus": "time_series",
     "timePeriod": "this_year",
     "selectedMetrics": { "NewBiz": ["deals", "value"] }
@@ -61,16 +66,19 @@ Example: Missing reportArchetype (GOOD)This is GOOD because it correctly identif
         { "id": 2, "metric": "NewBiz_value" }
     ]
 }
-5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
 
 
-Interpretation: 
-pipeline often means generated newbiz pipeline. Look for stage names like SQO, SQL or Opportunity created
-marketing channels: exclude channels called things like sales, bdr, sdr, calls, outbound (things that are clearly not marketing activity)
+
+
+
+
 
 
 EXAMPLES:
-Note that all filters and values must be inferred from the provided context 
+Note that all filters and values must be inferred from the provided  (dynamic value mappings) 
+
+Interpretation:  stage names must be interpreted. Eg pipeline often means generated newbiz pipeline. Look for stage names like SQO, SQL or Opportunity created
+marketing channels: exclude channels called things like sales, bdr, sdr, calls, outbound (things that are clearly not marketing activity)
 
 
 QUESTION
@@ -258,3 +266,8 @@ answer
     }
   ]
 }
+
+
+
+
+5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
