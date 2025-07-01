@@ -30,6 +30,7 @@ interface EngagementReportState {
   metrics: {
     base: string[];
     influenced: { [stageName: string]: ('deals' | 'value')[] };
+    attributed: { [stageName: string]: ('deals')[] };
   };
   filters: {
     eventNames: string[];
@@ -67,7 +68,7 @@ export default function HomePage() {
   const [engagementConfig, setEngagementConfig] = useState<EngagementReportState>({
     reportFocus: 'time_series',
     timePeriod: 'this_year',
-    metrics: { base: ['companies', 'contacts', 'events', 'sessions'], influenced: {} },
+    metrics: { base: ['companies', 'contacts', 'events', 'sessions'], influenced: {}, attributed: {} },
     filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
     chartMode: 'single_segmented',
     singleChartMetric: 'companies',
@@ -95,24 +96,36 @@ export default function HomePage() {
 
   // --- DERIVED STATE ---
   const { currentConfig, availableMetricsForChart, allAvailableMetrics } = useMemo(() => {
+    const sanitize = (name: string) => name.replace(/\s/g, '_');
+
     if (reportArchetype === 'outcome_analysis') {
       const allMetrics = Object.entries(outcomeConfig.selectedMetrics).flatMap(([stage, types]) => 
-        types.map(type => `${stage.replace(/\s/g, '_')}_${type}`)
+        types.map(type => `${sanitize(stage)}_${type}`)
       ).sort();
       return { currentConfig: outcomeConfig, availableMetricsForChart: allMetrics, allAvailableMetrics: allMetrics };
     }
+    
+    // Engagement Analysis
     const all = [
       ...engagementConfig.metrics.base,
       ...Object.entries(engagementConfig.metrics.influenced).flatMap(([stage, types]) => 
-        types.map(type => `influenced_${stage.replace(/\s/g, '_')}_${type}`)
-      )
+        types.map(type => `influenced_${sanitize(stage)}_${type}`)
+      ),
+      ...Object.entries(engagementConfig.metrics.attributed).flatMap(([stage, types]) => 
+        types.map(type => `attributed_${sanitize(stage)}_${type}`)
+      ),
     ].sort();
+    
     const chartTableMetrics = [
       ...engagementConfig.metrics.base,
       ...Object.entries(engagementConfig.metrics.influenced).flatMap(([stage, types]) => 
-        types.includes('deals') ? [`influenced_${stage.replace(/\s/g, '_')}_deals`] : []
-      )
+        types.includes('deals') ? [`influenced_${sanitize(stage)}_deals`] : []
+      ),
+      ...Object.entries(engagementConfig.metrics.attributed).flatMap(([stage, types]) => 
+        types.includes('deals') ? [`attributed_${sanitize(stage)}_deals`] : []
+      ),
     ].sort();
+
     return { currentConfig: engagementConfig, availableMetricsForChart: chartTableMetrics, allAvailableMetrics: all };
   }, [reportArchetype, outcomeConfig, engagementConfig]);
 
@@ -246,7 +259,27 @@ export default function HomePage() {
           {isMetricsOpen && (isOutcome ? 
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4">{stageOptions.map(stage => (<div key={stage}><p className="font-medium text-white">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('deals')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Deals</span></label><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('value')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Value</span></label></div></div>))}</div>
             :
-            <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4"><div><p className="font-medium text-white">Base Metrics</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('companies')} onChange={(e) => setMetric('metrics.base', 'companies', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Companies</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('contacts')} onChange={(e) => setMetric('metrics.base', 'contacts', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Contacts</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('events')} onChange={(e) => setMetric('metrics.base', 'events', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Events</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('sessions')} onChange={(e) => setMetric('metrics.base', 'sessions', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Sessions</span></label></div></div><div><p className="font-medium text-white">Influenced Stage Metrics</p>{stageOptions.map(stage => (<div key={stage} className="pl-2 mt-1"><p className="font-medium text-gray-300">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('deals')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Touched Deals</span></label><label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('value')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Touched Value</span></label></div></div>))}</div></div>
+            <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4">
+                <div>
+                    <p className="font-medium text-white">Base Metrics</p>
+                    <div className="pl-2 mt-1 space-y-1">
+                        <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('companies')} onChange={(e) => setMetric('metrics.base', 'companies', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Companies</span></label>
+                        <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('contacts')} onChange={(e) => setMetric('metrics.base', 'contacts', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Contacts</span></label>
+                        <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('events')} onChange={(e) => setMetric('metrics.base', 'events', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Events</span></label>
+                        <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.base.includes('sessions')} onChange={(e) => setMetric('metrics.base', 'sessions', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Sessions</span></label>
+                    </div>
+                </div>
+                {stageOptions.map(stage => (
+                    <div key={stage} className="pl-2 mt-1">
+                        <p className="font-medium text-gray-300">{stage}</p>
+                        <div className="pl-2 mt-1 space-y-1">
+                            <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('deals')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Touched Deals</span></label>
+                            <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.attributed[stage]?.includes('deals')} onChange={(e) => setMetric(`metrics.attributed.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Attributed Deals</span></label>
+                            <label className="flex items-center"><input type="checkbox" checked={engagementConfig.metrics.influenced[stage]?.includes('value')} onChange={(e) => setMetric(`metrics.influenced.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Touched Value</span></label>
+                        </div>
+                    </div>
+                ))}
+            </div>
           )}
         </div>
         <div><button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Filters</span><span className="text-xs">{isFiltersOpen ? '▼' : '►'}</span></button>
