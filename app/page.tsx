@@ -7,7 +7,7 @@ import Chart from './components/Chart';
 import Table from './components/Table';
 import { MultiSelectFilter, OptionType } from './components/MultiSelectFilter';
 import { X } from 'lucide-react';
-import ChatInterface from './components/ChatInterface'; // <-- IMPORTED
+import ChatInterface from './components/ChatInterface';
 
 // --- State Shape Interfaces ---
 type Message = {
@@ -52,38 +52,40 @@ interface EngagementReportState {
   kpiCardConfig: KpiCardConfig[];
 }
 
+const defaultEngagementConfig: EngagementReportState = {
+    reportFocus: 'time_series',
+    timePeriod: 'this_year',
+    metrics: { base: [], influenced: {}, attributed: {} },
+    filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
+    funnelLength: 'unlimited',
+    chartMode: 'multi_metric',
+    singleChartMetric: 'sessions',
+    multiChartMetrics: [],
+    segmentationProperty: 'channel',
+    kpiCardConfig: [],
+};
+
+const defaultOutcomeConfig: OutcomeReportState = {
+    reportFocus: 'time_series',
+    timePeriod: 'this_year',
+    selectedMetrics: {},
+    selectedCountries: [],
+    selectedEmployeeSizes: [],
+    chartMode: 'multiple_metrics',
+    singleChartMetric: '',
+    multiChartMetrics: [],
+    segmentationProperty: 'companyCountry',
+    kpiCardConfig: [],
+};
+
+
 export default function HomePage() {
   // --- Primary State ---
   const [reportArchetype, setReportArchetype] = useState('outcome_analysis'); 
   
   // --- Independent State Objects for Each Report ---
-  const [outcomeConfig, setOutcomeConfig] = useState<OutcomeReportState>({
-    reportFocus: 'time_series',
-    timePeriod: 'this_year',
-    selectedMetrics: { 'NewBiz': ['deals', 'value'], 'SQL': ['deals'] },
-    selectedCountries: [],
-    selectedEmployeeSizes: [],
-    chartMode: 'multiple_metrics',
-    singleChartMetric: 'NewBiz_value',
-    multiChartMetrics: ['NewBiz_value', 'SQL_deals'],
-    segmentationProperty: 'companyCountry',
-    kpiCardConfig: [
-      { id: 1, metric: 'NewBiz_deals' }, { id: 2, metric: 'NewBiz_value' }, { id: 3, metric: 'SQL_deals' },
-    ],
-  });
-
-  const [engagementConfig, setEngagementConfig] = useState<EngagementReportState>({
-    reportFocus: 'time_series',
-    timePeriod: 'this_year',
-    metrics: { base: ['companies', 'contacts', 'events', 'sessions'], influenced: {}, attributed: {} },
-    filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
-    funnelLength: 'unlimited',
-    chartMode: 'single_segmented',
-    singleChartMetric: 'companies',
-    multiChartMetrics: ['companies', 'contacts', 'sessions'],
-    segmentationProperty: 'channel',
-    kpiCardConfig: [],
-  });
+  const [outcomeConfig, setOutcomeConfig] = useState<OutcomeReportState>(defaultOutcomeConfig);
+  const [engagementConfig, setEngagementConfig] = useState<EngagementReportState>(defaultEngagementConfig);
   
   // --- CHAT-RELATED STATE ---
   const [activeView, setActiveView] = useState<'prompt' | 'configure'>('prompt');
@@ -123,21 +125,21 @@ export default function HomePage() {
     
     // Engagement Analysis
     const all = [
-      ...engagementConfig.metrics.base,
-      ...Object.entries(engagementConfig.metrics.influenced).flatMap(([stage, types]) => 
+      ...(engagementConfig.metrics.base || []),
+      ...Object.entries(engagementConfig.metrics.influenced || {}).flatMap(([stage, types]) => 
         types.map(type => `influenced_${sanitize(stage)}_${type}`)
       ),
-      ...Object.entries(engagementConfig.metrics.attributed).flatMap(([stage, types]) => 
+      ...Object.entries(engagementConfig.metrics.attributed || {}).flatMap(([stage, types]) => 
         types.includes('deals') ? [`attributed_${sanitize(stage)}_deals`] : []
       ),
     ].sort();
     
     const chartTableMetrics = [
-      ...engagementConfig.metrics.base,
-      ...Object.entries(engagementConfig.metrics.influenced).flatMap(([stage, types]) => 
+      ...(engagementConfig.metrics.base || []),
+      ...Object.entries(engagementConfig.metrics.influenced || {}).flatMap(([stage, types]) => 
         types.includes('deals') ? [`influenced_${sanitize(stage)}_deals`] : []
       ),
-      ...Object.entries(engagementConfig.metrics.attributed).flatMap(([stage, types]) => 
+      ...Object.entries(engagementConfig.metrics.attributed || {}).flatMap(([stage, types]) => 
         types.includes('deals') ? [`attributed_${sanitize(stage)}_deals`] : []
       ),
     ].sort();
@@ -197,7 +199,6 @@ export default function HomePage() {
         setKpiData(reportData.kpiData);
         setChartData(reportData.chartData);
 
-        // --- NEW: Second API call to get natural language summary ---
         if (currentQuery) {
             const chatResponse = await fetch('/api/chat', {
                 method: 'POST',
@@ -206,7 +207,7 @@ export default function HomePage() {
             });
             const chatData = await chatResponse.json();
             setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: chatData.answer } : m));
-            setCurrentQuery(''); // Reset query after getting summary
+            setCurrentQuery('');
         }
 
       } catch (error) { 
@@ -219,7 +220,6 @@ export default function HomePage() {
       setIsGenerating(false);
     };
     
-    // Only fetch if not generating from a prompt OR if a config has been set by the prompt
     if (!isGenerating || currentQuery) {
         const handler = setTimeout(() => { fetchData(); }, 500);
         return () => { clearTimeout(handler); };
@@ -238,23 +238,23 @@ export default function HomePage() {
         });
         const data = await response.json();
 
-        if (data.error) throw new Error(data.error);
+        if (data.error) throw new Error(data.details || data.error);
 
-        // Update the correct config state based on the AI's response
         if (data.config.reportArchetype === 'outcome_analysis') {
             setOutcomeConfig(data.config);
         } else {
             setEngagementConfig(data.config);
         }
         setReportArchetype(data.config.reportArchetype);
-        setCurrentQuery(query); // Set the query to trigger the second API call in useEffect
-        setActiveView('configure'); // Switch to the configure view
+        setCurrentQuery(query);
+        // setActiveView('configure'); // <-- THIS LINE IS REMOVED TO KEEP THE CHAT VIEW OPEN
         setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Configuration received. Fetching report data...' } : m));
 
     } catch (error) {
         console.error("Failed to generate config from prompt:", error);
         setIsGenerating(false);
-        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: 'Sorry, I had trouble understanding that. Could you try rephrasing?' } : m));
+        const errorMessage = error instanceof Error ? error.message : 'Sorry, I had trouble understanding that. Could you try rephrasing?';
+        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: errorMessage } : m));
     }
   };
 
