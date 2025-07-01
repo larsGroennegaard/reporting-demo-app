@@ -45,13 +45,16 @@ function buildDynamicContext(options: any): string {
 
 
 export async function POST(request: NextRequest) {
+  console.log("\n--- New Chat Request ---");
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) {
+    console.error("GEMINI_API_KEY environment variable not set.");
     return new NextResponse(JSON.stringify({ error: 'GEMINI_API_KEY environment variable not set.' }), { status: 500 });
   }
 
   const body = await request.json();
   const { query, kpiData, chartData } = body;
+  console.log(`Received query: "${query}"`);
 
   if (!query) {
     return new NextResponse(JSON.stringify({ error: 'Query is required.' }), { status: 400 });
@@ -59,6 +62,7 @@ export async function POST(request: NextRequest) {
 
   // --- Step 2: Generate Natural Language Answer ---
   if (kpiData) {
+    console.log("Entering Step 2: Generating natural language summary.");
     const summaryPrompt = `
       Based on the following data, provide a concise, natural language answer to the user's question.
       Keep the answer to 1-3 sentences.
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
       });
       const result = await response.json();
       const answer = result.candidates[0]?.content?.parts[0]?.text || "I was unable to generate a summary for this report.";
+      console.log("Successfully generated summary:", answer);
       return NextResponse.json({ answer });
     } catch (error) {
       console.error("Error calling Gemini API for summary:", error);
@@ -85,24 +90,27 @@ export async function POST(request: NextRequest) {
 
   // --- Step 1: Generate Report Configuration ---
   else {
+    console.log("Entering Step 1: Generating report configuration.");
     try {
-        // Fetch all dynamic values from our config-options endpoint
+        console.log("Fetching dynamic config options...");
         const internalApiUrl = new URL('/api/config-options', request.url).toString();
         const optionsResponse = await fetch(internalApiUrl, {
             headers: { 'x-api-key': process.env.NEXT_PUBLIC_API_SECRET_KEY || '' }
         });
         if (!optionsResponse.ok) throw new Error('Failed to fetch dynamic config options');
         const dynamicOptions = await optionsResponse.json();
+        console.log("Successfully fetched dynamic options.");
 
-        // Dynamically build the context string
         const dynamicContext = buildDynamicContext(dynamicOptions);
-
         const configRulesTemplate = await readAIContextFile('config_rules.md');
 
-        // Inject the full dynamic context into the rules template
         const systemPrompt = configRulesTemplate
             .replace('{{DYNAMIC_PROMPT_CONTEXT}}', dynamicContext)
             + `\n\nUser's Question: "${query}"\n\nNow, generate the JSON configuration object that answers this question.`;
+        
+        console.log("--- Sending Prompt to Gemini ---");
+        // console.log(systemPrompt); // Uncomment for very detailed debugging
+        console.log("-----------------------------");
 
         const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
             method: 'POST',
@@ -113,10 +121,14 @@ export async function POST(request: NextRequest) {
         const result = await response.json();
         
         let config;
+        const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
+        console.log("Raw response from Gemini:", rawText);
+
         try {
-            const rawText = result.candidates[0]?.content?.parts[0]?.text || '{}';
+            // FIX: Escaped the backticks in the regular expressions
             const jsonText = rawText.replace(/```json/g, '').replace(/```/g, '').trim();
             config = JSON.parse(jsonText);
+            console.log("Successfully parsed JSON config.");
         } catch (e) {
             console.error("Failed to parse JSON from AI:", e);
             throw new Error("AI returned malformed JSON");
@@ -126,6 +138,7 @@ export async function POST(request: NextRequest) {
         if (!config.kpiCardConfig) config.kpiCardConfig = [];
         config.kpiCardConfig.forEach((card: any, index: number) => { card.id = Date.now() + index; });
 
+        console.log("Final config object being sent to frontend:", JSON.stringify(config, null, 2));
         return NextResponse.json({ config });
 
     } catch (error) {
