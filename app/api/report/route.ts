@@ -193,9 +193,6 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
     let finalSelects = [];
     let finalFromParts = new Set<string>();
     
-    const influencedFunnelClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
-    const attributedFunnelClause = getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp');
-
     ctes.push(`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})`);
 
     if (hasBaseMetrics) {
@@ -210,19 +207,39 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
       finalSelects.push('b.*');
       finalFromParts.add('BaseMetrics AS b');
     }
+    
     if (hasInfluencedMetrics) {
-      const influencedSelects = Object.entries(config.metrics.influenced).flatMap(([stage, types]) => 
-        (types as string[]).map(type => {
-          const sanitizedStage = stage.replace(/\s/g, '_');
-          if (type === 'deals') return `COUNT(DISTINCT CASE WHEN s.name = '${sanitizeForSql(stage)}' THEN s.dd_stage_id END) AS influenced_${sanitizedStage}_deals`;
-          return `SUM(CASE WHEN s.name = '${sanitizeForSql(stage)}' THEN s.value END) AS influenced_${sanitizedStage}_value`;
-        })
-      ).join(', ');
-      ctes.push(`AggregatedInfluenced AS (SELECT ${influencedSelects} FROM ${eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions)${influencedFunnelClause})`);
-      finalSelects.push('i.*');
-      finalFromParts.add('AggregatedInfluenced i');
+        const influencedStages = Object.keys(config.metrics.influenced);
+        const funnelLengthClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
+
+        // Create a CTE that gets all unique influenced deals and their values to prevent double-counting.
+        const uniqueDealsClauses = influencedStages.map(stage =>
+            `SELECT DISTINCT s.dd_stage_id, s.value, s.name FROM ${eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND s.name = '${sanitizeForSql(stage)}'${funnelLengthClause}`
+        ).join(' UNION ALL ');
+
+        ctes.push(`UniqueInfluencedDeals AS (${uniqueDealsClauses})`);
+
+        // Build the final aggregation selects from this new CTE.
+        const influencedSelects = Object.entries(config.metrics.influenced).flatMap(([stage, types]) =>
+            (types as string[]).map(type => {
+                const sanitizedStage = stage.replace(/\s/g, '_');
+                if (type === 'deals') {
+                    return `COUNT(DISTINCT CASE WHEN name = '${sanitizeForSql(stage)}' THEN dd_stage_id END) AS influenced_${sanitizedStage}_deals`;
+                }
+                if (type === 'value') {
+                    return `SUM(CASE WHEN name = '${sanitizeForSql(stage)}' THEN value END) AS influenced_${sanitizedStage}_value`;
+                }
+                return '';
+            })
+        ).join(', ');
+
+        ctes.push(`AggregatedInfluenced AS (SELECT ${influencedSelects} FROM UniqueInfluencedDeals)`);
+        finalSelects.push('i.*');
+        finalFromParts.add('AggregatedInfluenced i');
     }
+
     if (hasAttributedMetrics) {
+        const attributedFunnelClause = getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp');
         const attributedSelects = Object.keys(config.metrics.attributed).map(stage => {
             const sanitizedStage = stage.replace(/\s/g, '_');
             return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(stage)}' THEN a.weight ELSE 0 END) AS attributed_${sanitizedStage}_deals`;
@@ -415,7 +432,7 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
              }
             if(attributedChartMetrics.length > 0) {
                  const attributedStages = Array.from(new Set(attributedChartMetrics.map((m: string) => m.replace('attributed_', '').replace(/_deals/g, ''))));
-                 const stageFilter = `r.stage.name IN (${attributedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
+                 const stageFilter = `r.stage..name IN (${attributedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
                  ctes.push(`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})`);
                  const attributedSelects = attributedChartMetrics.map((m: string) => {
                     const rawStage = m.replace('attributed_', '').replace(/_deals/g, '');

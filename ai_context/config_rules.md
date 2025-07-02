@@ -384,4 +384,66 @@ QUESTIONhow much newbiz and pipeline have we received from people viewing the pr
     }
   ]
 }
+
+question: can you give me a snapshot of our pipeline last year?
+Explanation: in this context pipeline means the stages that make up the pipeline, look at the stages and see if you can guess which they are-
+
+answer
+{
+  "reportArchetype": "outcome_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "last_year",
+  "selectedMetrics": {
+    "SQL": [
+      "deals",
+      "value"
+    ],
+    "NewBiz": [
+      "deals",
+      "value"
+    ],
+    "MQL": [
+      "deals",
+      "value"
+    ]
+  },
+  "selectedCountries": [],
+  "selectedEmployeeSizes": [],
+  "chartMode": "multiple_metrics",
+  "singleChartMetric": "SQL_value",
+  "multiChartMetrics": [
+    "SQL_value",
+    "NewBiz_value",
+    "MQL_value"
+  ],
+  "segmentationProperty": "companyCountry",
+  "kpiCardConfig": [
+    {
+      "id": 1751437368222,
+      "metric": "MQL_deals"
+    },
+    {
+      "id": 1751437368223,
+      "metric": "SQL_deals"
+    },
+    {
+      "id": 1751437402707,
+      "metric": "NewBiz_deals"
+    },
+    {
+      "id": 1751437403430,
+      "metric": "MQL_value"
+    },
+    {
+      "id": 1751437404255,
+      "metric": "SQL_value"
+    },
+    {
+      "id": 1751437405065,
+      "metric": "NewBiz_value"
+    }
+  ]
+}
+
+
 6. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
