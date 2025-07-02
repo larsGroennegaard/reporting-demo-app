@@ -21,11 +21,11 @@ const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'time
     case 'last_year':
         return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR), YEAR)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), YEAR))`;
     case 'last_3_months':
-        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH))`;
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
     case 'last_6_months':
-        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH))`;
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
     case 'last_12_months':
-        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))`;
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
     default:
       return '';
   }
