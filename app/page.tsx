@@ -183,7 +183,7 @@ export default function HomePage() {
         setEngagementConfig(prev => ({ ...prev, multiChartMetrics: syncedMulti, singleChartMetric: syncedSingle, kpiCardConfig: syncedKpis }));
       }
     }
-  }, [availableMetricsForChart, allAvailableMetrics, reportArchetype]);
+  }, [availableMetricsForChart, allAvailableMetrics, reportArchetype, engagementConfig, outcomeConfig]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -203,7 +203,12 @@ export default function HomePage() {
             const chatResponse = await fetch('/api/chat', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ query: currentQuery, kpiData: reportData.kpiData, chartData: reportData.chartData })
+                body: JSON.stringify({ 
+                    query: currentQuery, 
+                    kpiData: reportData.kpiData, 
+                    chartData: reportData.chartData,
+                    config: configForApi 
+                })
             });
             const chatData = await chatResponse.json();
             setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: chatData.answer } : m));
@@ -224,7 +229,7 @@ export default function HomePage() {
         const handler = setTimeout(() => { fetchData(); }, 500);
         return () => { clearTimeout(handler); };
     }
-  }, [JSON.stringify(currentConfig), reportArchetype, currentQuery]);
+  }, [JSON.stringify(currentConfig), reportArchetype, currentQuery, isGenerating, outcomeConfig.selectedMetrics]);
 
   // --- HANDLERS ---
   const handleQuerySubmit = async (query: string) => {

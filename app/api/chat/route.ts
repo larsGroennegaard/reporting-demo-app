@@ -81,7 +81,7 @@ export async function POST(request: NextRequest) {
   }
 
   const body = await request.json();
-  const { query, kpiData, chartData } = body;
+  const { query, kpiData, chartData, config } = body;
   console.log(`Received query: "${query}"`);
 
   if (!query) {
@@ -94,11 +94,19 @@ export async function POST(request: NextRequest) {
   if (kpiData) {
     console.log("Entering Step 2: Generating natural language summary.");
     const summaryPrompt = `
-      Based on the following data, provide a concise, natural language answer to the user's question.
+      Based on the user's question and the following data and configuration, provide a concise, natural language answer.
       Keep the answer to 1-3 sentences.
+      
       User's Question: "${query}"
-      KPI Data: ${JSON.stringify(kpiData, null, 2)}
+      
+      Configuration Used:
+      ${JSON.stringify(config, null, 2)}
+
+      KPI Data: 
+      ${JSON.stringify(kpiData, null, 2)}
+      
       Chart/Table Data Summary: The chart/table contains ${chartData?.length || 0} rows of data.
+      
       Answer:
     `;
 
