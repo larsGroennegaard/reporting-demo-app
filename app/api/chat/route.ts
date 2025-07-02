@@ -154,8 +154,7 @@ export async function POST(request: NextRequest) {
             + `\n\nUser's Question: "${query}"`;
         
         console.log("--- Sending Prompt to Gemini ---");
-        // LOGGING ENABLED: This will now show the full prompt in your Vercel logs.
-        console.log(systemPrompt);
+        // console.log(systemPrompt); // This line has been commented out
         console.log("-----------------------------");
 
         const payload = {
