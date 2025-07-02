@@ -1,18 +1,17 @@
 // app/report/[id]/page.tsx
 "use client"; 
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import KpiCard from '../../components/KpiCard';
 import Chart from '../../components/Chart';
 import Table from '../../components/Table';
 import { MultiSelectFilter, OptionType } from '../../components/MultiSelectFilter';
-import { X, Save } from 'lucide-react';
+import { X, Save, PanelLeftClose, PanelRightClose } from 'lucide-react';
 import ChatInterface from '../../components/ChatInterface';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import SaveReportDialog from '@/app/components/SaveReportDialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import { PanelLeftClose, PanelRightClose } from 'lucide-react';
 
 // --- State Shape Interfaces ---
 type Message = {
@@ -93,13 +92,17 @@ interface SavedReport {
   createdAt: string;
 }
 
-// Define props interface for the page, including searchParams
+// Define the correct props interface for a Next.js Page Component with promises
 interface ReportPageProps {
-  params: { id: string };
-  searchParams?: { [key: string]: string | string[] | undefined };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-export default function ReportPage({ params, searchParams }: ReportPageProps) {
+export default function ReportPage({ params: paramsPromise, searchParams: searchParamsPromise }: ReportPageProps) {
+  // Unwrap the promises using React.use()
+  const params = React.use(paramsPromise);
+  const searchParams = React.use(searchParamsPromise);
+
   const promptSubmitted = useRef(false);
   const [savedReports, setSavedReports] = useLocalStorage<SavedReport[]>('savedReports', []);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -265,11 +268,11 @@ export default function ReportPage({ params, searchParams }: ReportPageProps) {
       setIsGenerating(false);
     };
     
-    if (!isGenerating || currentQuery) {
+    if ((!isGenerating || currentQuery) && (Object.keys(outcomeConfig.selectedMetrics).length > 0 || engagementConfig.metrics.base.length > 0)) {
         const handler = setTimeout(() => { fetchData(); }, 500);
         return () => { clearTimeout(handler); };
     }
-  }, [JSON.stringify(currentConfig), reportArchetype, currentQuery, isGenerating, outcomeConfig.selectedMetrics]);
+  }, [JSON.stringify(currentConfig), reportArchetype, currentQuery, isGenerating, outcomeConfig.selectedMetrics, engagementConfig.metrics.base]);
 
   // --- HANDLERS ---
   const handleQuerySubmit = async (query: string) => {
