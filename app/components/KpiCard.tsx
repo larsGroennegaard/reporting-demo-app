@@ -4,12 +4,24 @@ export default function KpiCard({ title, value }: { title: any, value: any }) {
   
   let displayValue = value;
 
-  // Check if the value is a number and the title suggests it's a currency
-  if (typeof value === 'number' && title.toLowerCase().includes('value')) {
-    displayValue = new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD',
-    }).format(value);
+  if (typeof value === 'number') {
+    // Check if the title suggests it's a currency
+    if (title.toLowerCase().includes('value')) {
+      displayValue = new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(value);
+    } 
+    // Check if it's a float (like attributed deals) and round it
+    else if (value % 1 !== 0) {
+      displayValue = value.toFixed(2);
+    }
+    // It's an integer, format with commas for readability
+    else {
+      displayValue = new Intl.NumberFormat('en-US').format(value);
+    }
   }
 
   return (

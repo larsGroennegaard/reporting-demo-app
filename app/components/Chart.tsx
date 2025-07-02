@@ -5,15 +5,20 @@ import { Bar, BarChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, L
 
 const COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff8042", "#0088FE", "#00C49F", "#FFBB28"];
 
-const formatYAxisTick = (tick: any) => { /* ... remains the same ... */ 
+const formatYAxisTick = (tick: any) => { 
   if (typeof tick !== 'number') return tick;
   if (tick >= 1000000) return `${(tick / 1000000).toFixed(1)}M`;
   if (tick >= 1000) return `${(tick / 1000).toFixed(0)}K`;
-  return String(tick);
+  return String(Math.round(tick));
 };
 
-// This function is no longer needed here, we'll move its logic to the components
-// const processChartData = ...
+// Formatter for tooltips to round numbers
+const formatTooltipValue = (value: any) => {
+    if (typeof value !== 'number') return value;
+    if (value % 1 !== 0) return value.toFixed(2);
+    return new Intl.NumberFormat('en-US').format(value);
+};
+
 
 export default function Chart({ data, mode, config }: { data: any[], mode: string, config: any }) {
   if (!data || data.length === 0) {
@@ -31,7 +36,7 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
             <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
             <XAxis dataKey="segment" stroke="#A0AEC0" angle={-15} textAnchor="end" height={50} />
             <YAxis stroke="#A0AEC0" tickFormatter={formatYAxisTick}/>
-            <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} labelStyle={{ color: '#E2E8F0' }} formatter={(value: any) => typeof value === 'number' ? formatYAxisTick(value) : value} />
+            <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} labelStyle={{ color: '#E2E8F0' }} formatter={formatTooltipValue} />
             <Legend wrapperStyle={{ color: '#E2E8F0' }}/>
             {keys.map((key, index) => (
               <Bar key={key} dataKey={key} name={key.replace(/_/g, ' ')} fill={COLORS[index % COLORS.length]} />
@@ -73,7 +78,7 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
           <CartesianGrid strokeDasharray="3 3" stroke="#4A5568" />
           <XAxis dataKey="month" stroke="#A0AEC0" />
           <YAxis stroke="#A0AEC0" tickFormatter={formatYAxisTick} />
-          <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} labelStyle={{ color: '#E2E8F0' }} formatter={(value: any) => typeof value === 'number' ? formatYAxisTick(value) : value} />
+          <Tooltip contentStyle={{ backgroundColor: '#1A202C', border: '1px solid #4A5568' }} labelStyle={{ color: '#E2E8F0' }} formatter={formatTooltipValue} />
           <Legend wrapperStyle={{ color: '#E2E8F0' }}/>
           {keys.map((key, index) => (
             <Line key={key} type="monotone" dataKey={key} name={key} stroke={COLORS[index % COLORS.length]} activeDot={{ r: 8 }} connectNulls />

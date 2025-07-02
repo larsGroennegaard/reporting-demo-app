@@ -1,6 +1,13 @@
 // app/components/Table.tsx
 "use client";
 
+// Helper to format numbers for the table
+const formatTableCell = (value: any) => {
+    if (typeof value !== 'number') return value;
+    if (value % 1 !== 0) return value.toFixed(2);
+    return new Intl.NumberFormat('en-US').format(value);
+};
+
 // This helper now handles three distinct modes
 const processTableData = (data: any[], mode: string, config: any) => {
   if (!data || data.length === 0) return { tableHeaders: [], tableRows: [] };
@@ -9,15 +16,12 @@ const processTableData = (data: any[], mode: string, config: any) => {
     const metrics = config.multiChartMetrics || [];
     const pivoted: { [key: string]: any } = {};
     
-    // FIX: Added (metric: string) type annotation
     metrics.forEach((metric: string) => {
         pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') };
     });
 
-    // FIX: Added (item: any) type annotation
     data.forEach((item: any) => {
         const segment = item.segment || 'Unknown';
-        // FIX: Added (metric: string) type annotation
         metrics.forEach((metric: string) => {
             if (pivoted[metric]) {
                 pivoted[metric][segment] = item[metric] || 0;
@@ -26,7 +30,8 @@ const processTableData = (data: any[], mode: string, config: any) => {
     });
 
     const segments = data.map(item => item.segment || 'Unknown');
-    const tableHeaders = ['Metric', ...[...new Set(segments)]];
+    // THE FIX: Changed from spread operator to Array.from() for compatibility
+    const tableHeaders = ['Metric', ...Array.from(new Set(segments))];
     const tableRows = Object.values(pivoted);
     return { tableHeaders, tableRows };
   } 
@@ -36,7 +41,6 @@ const processTableData = (data: any[], mode: string, config: any) => {
   const timeUnits = new Set<string>();
 
   if (config.chartMode === 'single_segmented') {
-    // FIX: Added (item: any) type annotation
     data.forEach((item: any) => {
       const segment = item.segment || 'Unknown';
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -49,13 +53,10 @@ const processTableData = (data: any[], mode: string, config: any) => {
 
   } else { // multi_metric
     const metrics = config.multiChartMetrics || [];
-    // FIX: Added (metric: string) type annotation
     metrics.forEach((metric: string) => { pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') }; });
-    // FIX: Added (item: any) type annotation
     data.forEach((item: any) => {
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
       timeUnits.add(month);
-      // FIX: Added (metric: string) type annotation
       metrics.forEach((metric: string) => {
         if (pivoted[metric]) { pivoted[metric][month] = item[metric] || 0; }
       });
@@ -88,7 +89,7 @@ export default function Table({ data, mode, config }: { data: any[], mode: strin
               <tr key={rowIndex}>
                 {tableHeaders.map(header => (
                   <td key={`${rowIndex}-${header}`} className="whitespace-nowrap px-4 py-4 text-sm text-gray-300">
-                    {header === tableHeaders[0] ? row.rowHeader : row[header] || 0}
+                    {header === tableHeaders[0] ? row.rowHeader : formatTableCell(row[header] || 0)}
                   </td>
                 ))}
               </tr>
