@@ -212,14 +212,12 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
         const influencedStages = Object.keys(config.metrics.influenced);
         const funnelLengthClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
 
-        // Create a CTE that gets all unique influenced deals and their values to prevent double-counting.
         const uniqueDealsClauses = influencedStages.map(stage =>
             `SELECT DISTINCT s.dd_stage_id, s.value, s.name FROM ${eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND s.name = '${sanitizeForSql(stage)}'${funnelLengthClause}`
         ).join(' UNION ALL ');
 
         ctes.push(`UniqueInfluencedDeals AS (${uniqueDealsClauses})`);
 
-        // Build the final aggregation selects from this new CTE.
         const influencedSelects = Object.entries(config.metrics.influenced).flatMap(([stage, types]) =>
             (types as string[]).map(type => {
                 const sanitizedStage = stage.replace(/\s/g, '_');
@@ -432,7 +430,8 @@ function _buildEngagementChartQuery(config: any, eventsTable: string, companiesT
              }
             if(attributedChartMetrics.length > 0) {
                  const attributedStages = Array.from(new Set(attributedChartMetrics.map((m: string) => m.replace('attributed_', '').replace(/_deals/g, ''))));
-                 const stageFilter = `r.stage..name IN (${attributedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
+                 // THE FIX: Corrected the typo from r.stage..name to r.stage.name
+                 const stageFilter = `r.stage.name IN (${attributedStages.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')})`;
                  ctes.push(`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${eventsTable} e ${whereClause})`);
                  const attributedSelects = attributedChartMetrics.map((m: string) => {
                     const rawStage = m.replace('attributed_', '').replace(/_deals/g, '');

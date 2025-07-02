@@ -497,4 +497,66 @@ ANSWER: {
 }
 
 
+Q:what was the conversion from looking at product pages on our website to pipeline last 12 months
+EXPLANATION: look for signals first that match the user's request, then move on to page views and urls (for urls you have to guess).
+A:
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "last_12_months",
+  "metrics": {
+    "base": [
+      "sessions"
+    ],
+    "influenced": {
+      "SQL": [
+        "deals",
+        "value"
+      ]
+    },
+    "attributed": {
+      "SQL": [
+        "deals"
+      ]
+    }
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [
+      "Website - Product Pages"
+    ],
+    "url": null,
+    "selectedChannels": []
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "multi_metric",
+  "singleChartMetric": "influenced_SQL_deals",
+  "multiChartMetrics": [
+    "influenced_SQL_deals",
+    "sessions",
+    "attributed_SQL_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751438202327,
+      "metric": "sessions"
+    },
+    {
+      "id": 1751438202328,
+      "metric": "influenced_SQL_deals"
+    },
+    {
+      "id": 1751438202329,
+      "metric": "influenced_SQL_value"
+    },
+    {
+      "id": 1751438266121,
+      "metric": "attributed_SQL_deals"
+    }
+  ]
+}
+
+
+
 6. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
