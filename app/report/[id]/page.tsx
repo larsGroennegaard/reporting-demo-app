@@ -6,13 +6,13 @@ import KpiCard from '../../components/KpiCard';
 import Chart from '../../components/Chart';
 import Table from '../../components/Table';
 import { MultiSelectFilter, OptionType } from '../../components/MultiSelectFilter';
-import { X, Save, PanelLeftClose, PanelRightClose } from 'lucide-react';
+import { X, Save } from 'lucide-react';
 import ChatInterface from '../../components/ChatInterface';
-import { useSearchParams } from 'next/navigation';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import SaveReportDialog from '@/app/components/SaveReportDialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { PanelLeftClose, PanelRightClose } from 'lucide-react';
 
 // --- State Shape Interfaces ---
 type Message = {
@@ -93,8 +93,13 @@ interface SavedReport {
   createdAt: string;
 }
 
-export default function ReportPage({ params }: { params: { id: string } }) {
-  const searchParams = useSearchParams();
+// Define props interface for the page, including searchParams
+interface ReportPageProps {
+  params: { id: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+}
+
+export default function ReportPage({ params, searchParams }: ReportPageProps) {
   const promptSubmitted = useRef(false);
   const [savedReports, setSavedReports] = useLocalStorage<SavedReport[]>('savedReports', []);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
@@ -182,8 +187,8 @@ export default function ReportPage({ params }: { params: { id: string } }) {
   }, []);
 
   useEffect(() => {
-    const initialPrompt = searchParams.get('prompt');
-    if (initialPrompt && params.id === 'new' && !promptSubmitted.current) {
+    const initialPrompt = searchParams?.prompt;
+    if (typeof initialPrompt === 'string' && params.id === 'new' && !promptSubmitted.current) {
         promptSubmitted.current = true;
         handleQuerySubmit(initialPrompt);
     } else if (params.id && params.id !== 'new') {
@@ -474,35 +479,26 @@ export default function ReportPage({ params }: { params: { id: string } }) {
       <div className="flex h-full relative">
         <div className={cn(
           "bg-gray-800 shadow-lg transition-all duration-300 ease-in-out flex flex-col",
-          isConfigPanelCollapsed ? "w-0" : "w-1/3 max-w-md"
+          isConfigPanelCollapsed ? "w-0 opacity-0" : "w-1/3 max-w-md"
         )}>
-           <div className="p-4 border-b border-gray-700 flex-shrink-0">
-              <div className="flex bg-gray-700 rounded-md p-1">
-                <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
-                <button onClick={() => setActiveView('configure')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'configure' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Configure</button>
-              </div>
+          <div className={cn("flex flex-col h-full", isConfigPanelCollapsed && "invisible")}>
+            <div className="p-4 border-b border-gray-700 flex-shrink-0">
+                <div className="flex bg-gray-700 rounded-md p-1">
+                    <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
+                    <button onClick={() => setActiveView('configure')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'configure' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Configure</button>
+                </div>
             </div>
             <div className="flex-grow overflow-y-auto">
-              {activeView === 'prompt' ? (
+                {activeView === 'prompt' ? (
                 <ChatInterface onQuerySubmit={handleQuerySubmit} messages={messages} isGenerating={isGenerating} />
-              ) : (
+                ) : (
                 renderConfigurationPanels()
-              )}
+                )}
             </div>
+          </div>
         </div>
         
-        <div className="relative">
-             <div className="absolute top-1/2 -translate-y-1/2 -ml-3 z-10">
-                <Button 
-                    variant="secondary" 
-                    size="icon" 
-                    onClick={() => setIsConfigPanelCollapsed(!isConfigPanelCollapsed)}
-                    className="h-8 w-8 rounded-full"
-                >
-                    {isConfigPanelCollapsed ? <PanelRightClose size={16} /> : <PanelLeftClose size={16} />}
-                </Button>
-            </div>
-        </div>
+        <div className="flex-shrink-0 bg-gray-700 w-px" />
         
         <div className="flex-1 p-8 overflow-y-auto">
           <div className="flex justify-between items-center mb-6">
