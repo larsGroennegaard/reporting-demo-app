@@ -1,7 +1,7 @@
 AI Guidance: Report Configuration Generation1. Primary Goal & Output FormatYour primary goal is to translate the user's question into a single, valid JSON object. This object must conform to one of the two schemas defined below (OutcomeReportState or EngagementReportState).CRITICAL: Your response MUST be only the raw JSON object. Do not include markdown fences like ```json, explanations, or any other text. The JSON object MUST be complete and valid according to the schema.2. JSON Schema DefinitionsYou MUST generate a JSON object that strictly follows one of these two schemas.Schema A: OutcomeReportStateUsed for questions about core business outcomes (e.g., "show me NewBiz deals").{
   "reportArchetype": "outcome_analysis",
   "reportFocus": "time_series" | "segmentation",
-  "timePeriod": "this_year" | "last_quarter" | "last_month",
+  "timePeriod": "this_month" | "this_quarter" | "this_year" | "last_month" | "last_quarter" | "last_year" | "last_3_months" | "last_6_months" | "last_12_months",
   "selectedMetrics": { 
     "[stageName]": ["deals"?, "value"?] 
   },
@@ -13,11 +13,10 @@ AI Guidance: Report Configuration Generation1. Primary Goal & Output FormatYour 
   "segmentationProperty": "companyCountry" | "numberOfEmployees",
   "kpiCardConfig": "{ id: number, metric: string }[]"
 }
-
 Schema B: EngagementReportStateUsed for questions about user activities (e.g., "show me sessions from paid search").{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series" | "segmentation",
-  "timePeriod": "this_year" | "last_quarter" | "last_month",
+  "timePeriod": "this_month" | "this_quarter" | "this_year" | "last_month" | "last_quarter" | "last_year" | "last_3_months" | "last_6_months" | "last_12_months",
   "metrics": {
     "base": "('companies' | 'contacts' | 'events' | 'sessions')[]",
     "influenced": "{ [stageName]: ['deals'?, 'value'?] }",
@@ -36,14 +35,7 @@ Schema B: EngagementReportStateUsed for questions about user activities (e.g., "
   "segmentationProperty": "'channel' | 'companyCountry' | 'numberOfEmployees'",
   "kpiCardConfig": "{ id: number, metric: string }[]"
 }
-{{DYNAMIC_PROMPT_CONTEXT}}
-
-4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.
-
-Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.
-
-User Question: "what was our newbiz for 2025"
-BAD JSON Output:{
+{{DYNAMIC_PROMPT_CONTEXT}}4. Good vs. Bad ExamplesLearn from these examples to avoid common mistakes.Example: Missing reportArchetype (BAD)This is BAD because the top-level reportArchetype key is missing, making it impossible for the application to know which report to run.User Question: "what was our newbiz for 2025"BAD JSON Output:{
     "reportFocus": "time_series",
     "timePeriod": "this_year",
     "selectedMetrics": { "NewBiz": ["deals", "value"] }
@@ -66,24 +58,7 @@ Example: Missing reportArchetype (GOOD)This is GOOD because it correctly identif
         { "id": 2, "metric": "NewBiz_value" }
     ]
 }
-
-
-
-
-
-
-
-
-EXAMPLES:
-Note that all filters and values must be inferred from the provided  (dynamic value mappings) 
-
-Interpretation:  stage names must be interpreted. Eg pipeline often means generated newbiz pipeline. Look for stage names like SQO, SQL or Opportunity created
-marketing channels: exclude channels called things like sales, bdr, sdr, calls, outbound (things that are clearly not marketing activity)
-
-
-QUESTION
-how much pipeline did we get from paid search and paid social last quarter?
-{
+5. EXAMPLES:Note that all filters and values must be inferred from the provided (dynamic value mappings).Interpretation:Stage names must be interpreted. Eg "pipeline" often means generated newbiz pipeline. Look for stage names like "SQO", "SQL" or "Opportunity created"."marketing channels": exclude channels called things like "sales", "bdr", "sdr", "calls", "outbound" (things that are clearly not marketing activity).QUESTIONhow much pipeline did we get from paid search and paid social last quarter?{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series",
   "timePeriod": "last_quarter",
@@ -144,13 +119,7 @@ how much pipeline did we get from paid search and paid social last quarter?
     }
   ]
 }
-
-
-QUESTION:
-how much value did our organic and paid search generate this year
-
-Answer
-{
+QUESTION:how much value did our organic and paid search generate this year{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series",
   "timePeriod": "this_year",
@@ -204,13 +173,7 @@ Answer
     }
   ]
 }
-
-
-questoin
-Show me the impact of LLMs on mql, pipeline and newbiz over this year
-
-answer
-{
+QUESTIONShow me the impact of LLMs on mql, pipeline and newbiz over this year{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series",
   "timePeriod": "this_year",
@@ -266,12 +229,7 @@ answer
     }
   ]
 }
-
-
-
-QUESTION:Show me the new biz impact of marketing channels this year
-ANSWER
-{
+QUESTION:Show me the new biz impact of marketing channels this year{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series",
   "timePeriod": "this_year",
@@ -356,13 +314,7 @@ ANSWER
     }
   ]
 }
-
-
-
-QUESTION
-how much newbiz and pipeline have we received from people viewing the pricing page last quarter
-ANSWER
-{
+QUESTIONhow much newbiz and pipeline have we received from people viewing the pricing page last quarter{
   "reportArchetype": "engagement_analysis",
   "reportFocus": "time_series",
   "timePeriod": "last_quarter",
@@ -432,5 +384,4 @@ ANSWER
     }
   ]
 }
-
-5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
+6. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.

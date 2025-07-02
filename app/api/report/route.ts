@@ -8,18 +8,29 @@ const sanitizeForSql = (value: string) => value.replace(/'/g, "\\'");
 const getTimePeriodClause = (timePeriod: string, timestampColumn: string = 'timestamp'): string => {
   const now = new Date();
   switch (timePeriod) {
+    case 'this_month':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 1 MONTH))`;
+    case 'this_quarter':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER)) AND ${timestampColumn} < TIMESTAMP(DATE_ADD(DATE_TRUNC(CURRENT_DATE(), QUARTER), INTERVAL 1 QUARTER))`;
     case 'this_year':
       return ` AND ${timestampColumn} >= TIMESTAMP('${now.getFullYear()}-01-01') AND ${timestampColumn} < TIMESTAMP('${now.getFullYear() + 1}-01-01')`;
-    case 'last_quarter':
-      return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 QUARTER), QUARTER)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))`;
     case 'last_month':
        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 MONTH), MONTH)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))`;
+    case 'last_quarter':
+      return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 QUARTER), QUARTER)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), QUARTER))`;
+    case 'last_year':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_TRUNC(DATE_SUB(CURRENT_DATE(), INTERVAL 1 YEAR), YEAR)) AND ${timestampColumn} < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), YEAR))`;
+    case 'last_3_months':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 3 MONTH))`;
+    case 'last_6_months':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 6 MONTH))`;
+    case 'last_12_months':
+        return ` AND ${timestampColumn} >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))`;
     default:
       return '';
   }
 };
 
-// NEW HELPER for Funnel Length
 const getFunnelLengthClause = (funnelLength: string | undefined, touchTimestampCol: string, stageTimestampCol: string): string => {
     if (!funnelLength || funnelLength === 'unlimited') {
         return '';
@@ -182,7 +193,6 @@ function _buildEngagementKpiQuery(config: any, eventsTable: string, attributionT
     let finalSelects = [];
     let finalFromParts = new Set<string>();
     
-    // Get funnel length clauses
     const influencedFunnelClause = getFunnelLengthClause(config.funnelLength, 'e.timestamp', 's.timestamp');
     const attributedFunnelClause = getFunnelLengthClause(config.funnelLength, 'r.timestamp', 'r.stage.timestamp');
 
