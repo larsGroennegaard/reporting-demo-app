@@ -358,4 +358,79 @@ ANSWER
 }
 
 
+
+QUESTION
+how much newbiz and pipeline have we received from people viewing the pricing page last quarter
+ANSWER
+{
+  "reportArchetype": "engagement_analysis",
+  "reportFocus": "time_series",
+  "timePeriod": "last_quarter",
+  "metrics": {
+    "base": [
+      "sessions"
+    ],
+    "influenced": {
+      "NewBiz": [
+        "deals",
+        "value"
+      ],
+      "SQL": [
+        "value",
+        "deals"
+      ]
+    },
+    "attributed": {
+      "NewBiz": [
+        "deals"
+      ],
+      "SQL": [
+        "deals"
+      ]
+    }
+  },
+  "filters": {
+    "eventNames": [],
+    "signals": [],
+    "url": "/pricing",
+    "selectedChannels": []
+  },
+  "funnelLength": "unlimited",
+  "chartMode": "multi_metric",
+  "singleChartMetric": "influenced_NewBiz_deals",
+  "multiChartMetrics": [
+    "influenced_NewBiz_deals",
+    "attributed_NewBiz_deals",
+    "attributed_SQL_deals",
+    "influenced_SQL_deals"
+  ],
+  "segmentationProperty": "channel",
+  "kpiCardConfig": [
+    {
+      "id": 1751414204939,
+      "metric": "sessions"
+    },
+    {
+      "id": 1751414204940,
+      "metric": "influenced_NewBiz_deals"
+    },
+    {
+      "id": 1751414204941,
+      "metric": "attributed_NewBiz_deals"
+    },
+    {
+      "id": 1751414204942,
+      "metric": "influenced_NewBiz_value"
+    },
+    {
+      "id": 1751414357512,
+      "metric": "attributed_SQL_deals"
+    },
+    {
+      "id": 1751414360965,
+      "metric": "influenced_SQL_value"
+    }
+  ]
+}
+
 5. Final InstructionBased on all the rules, schemas, and examples provided, generate the complete and valid JSON configuration object that answers the user's question.
