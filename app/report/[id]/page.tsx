@@ -278,7 +278,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
   // --- HANDLERS ---
   const handleQuerySubmit = async (query: string) => {
     setIsGenerating(true);
-    setMessages(prev => [...prev, { sender: 'user', text: query }, { sender: 'loading', text: 'Generating configuration...' }]);
+    setMessages(prev => [...prev, { sender: 'user', text: query }, { sender: 'loading', text: 'Digging in to terabytes of GTM data...' }]);
     try {
         const response = await fetch('/api/chat', {
             method: 'POST',
@@ -296,7 +296,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         }
         setReportArchetype(data.config.reportArchetype);
         setCurrentQuery(query);
-        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Configuration received. Fetching report data...' } : m));
+        setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Got the data - now I just have to build your report...' } : m));
 
     } catch (error) {
         console.error("Failed to generate config from prompt:", error);
