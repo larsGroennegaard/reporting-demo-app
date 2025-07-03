@@ -1,13 +1,13 @@
 // app/api/reports/[id]/route.ts
-import { NextResponse, NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
 import { savedReports } from '@/lib/db'; // Import the shared array
 
 export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } } 
+  request: Request,
+  { params }: { params: Promise<{ id: string }> } 
 ) {
   try {
-    const { id } = params;
+    const { id } = await params; // Await the promise to get the id
     
     // Now searching in our shared in-memory "database"
     const report = savedReports.find(r => r.id === id);

@@ -1,5 +1,14 @@
 // lib/db.ts
 
-// This will act as our shared in-memory database for the prototype.
-// All API routes will import from this file to ensure they use the same data array.
-export const savedReports: any[] = [];
+// This trick ensures the in-memory array is not reset during hot-reloading in development.
+// It attaches the array to the global object, which persists across reloads.
+
+declare const global: {
+  savedReports: any[];
+};
+
+if (!global.savedReports) {
+  global.savedReports = [];
+}
+
+export const savedReports = global.savedReports;
