@@ -1,18 +1,16 @@
 // lib/db.ts
 import { Redis } from '@upstash/redis';
 
-// The Upstash client will use the environment variables automatically
-// added to your project when you connected the database.
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL!,
-  token: process.env.KV_REST_API_TOKEN!,
-});
+// Redis.fromEnv() is a convenient method that automatically reads the
+// connection details from the environment variables.
+const redis = Redis.fromEnv();
 
 const REPORTS_KEY = 'saved_reports';
 
 interface SavedReport {
   id: string;
   name: string;
+  description?: string;
   config: any;
   createdAt: string;
 }
@@ -34,4 +32,26 @@ export async function saveReport(report: SavedReport): Promise<void> {
   const reports = await getAllReports();
   reports.push(report);
   await redis.set(REPORTS_KEY, reports);
+}
+
+// Function to update an existing report
+export async function updateReport(id: string, name: string, description: string): Promise<SavedReport | null> {
+    const reports = await getAllReports();
+    const reportIndex = reports.findIndex(r => r.id === id);
+    if (reportIndex === -1) return null;
+
+    reports[reportIndex] = { ...reports[reportIndex], name, description };
+    await redis.set(REPORTS_KEY, reports);
+    return reports[reportIndex];
+}
+
+// Function to delete a report by ID
+export async function deleteReport(id: string): Promise<boolean> {
+    const reports = await getAllReports();
+    const updatedReports = reports.filter(r => r.id !== id);
+
+    if (reports.length === updatedReports.length) return false;
+
+    await redis.set(REPORTS_KEY, updatedReports);
+    return true;
 }
