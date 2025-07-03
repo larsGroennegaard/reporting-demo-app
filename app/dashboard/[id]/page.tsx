@@ -6,6 +6,8 @@ import { useParams } from 'next/navigation';
 import KpiCard from '../../components/KpiCard';
 import Chart from '../../components/Chart';
 import Table from '../../components/Table';
+import { PlusCircle } from 'lucide-react';
+import AddElementDialog from '../../components/AddElementDialog';
 
 interface DashboardItem {
     id: string;
@@ -34,8 +36,8 @@ function DashboardElement({ item }: { item: DashboardItem }) {
         const fetchData = async () => {
             setIsLoading(true);
             try {
-                // The API key is removed here as it's not needed for client-side fetches to your own API
-                const response = await fetch('/api/report', {
+                // Call the new, unsecured proxy route
+                const response = await fetch('/api/dashboard-element-data', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(item.reportConfig),
@@ -79,25 +81,51 @@ export default function DashboardPage() {
     const id = params.id as string;
     const [dashboard, setDashboard] = useState<Dashboard | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    const [isAddElementOpen, setIsAddElementOpen] = useState(false);
+
+    const fetchDashboard = async () => {
+        if (!id) return;
+        setIsLoading(true);
+        try {
+            const response = await fetch(`/api/dashboards/${id}`);
+            if (!response.ok) throw new Error('Failed to fetch dashboard');
+            const data = await response.json();
+            setDashboard(data);
+        } catch (error) {
+            console.error(error);
+        } finally {
+            setIsLoading(false);
+        }
+    };
 
     useEffect(() => {
-        if (!id) return;
-        const fetchDashboard = async () => {
-            setIsLoading(true);
-            try {
-                const response = await fetch(`/api/dashboards/${id}`);
-                if (!response.ok) throw new Error('Failed to fetch dashboard');
-                const data = await response.json();
-                setDashboard(data);
-            } catch (error) {
-                console.error(error);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
         fetchDashboard();
     }, [id]);
+
+    const handleAddElement = async (reportConfig: any, elementType: 'kpi' | 'chart' | 'table', kpiMetric?: string) => {
+        if (!dashboard) return;
+        
+        const newItem: DashboardItem = {
+            id: Date.now().toString(),
+            reportConfig,
+            elementType,
+            kpiMetric
+        };
+        
+        const updatedItems = [...dashboard.items, newItem];
+        
+        try {
+            await fetch(`/api/dashboards/${dashboard.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: updatedItems }),
+            });
+            fetchDashboard(); // Refresh dashboard to show the new element
+        } catch (error) {
+            console.error("Failed to add element to dashboard:", error);
+        }
+    };
+
 
     if (isLoading) {
         return <div className="p-8 text-white">Loading dashboard...</div>;
@@ -108,22 +136,37 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="p-8">
-            <h1 className="text-3xl font-bold text-white mb-2">{dashboard.name}</h1>
-            {dashboard.description && <p className="text-gray-400 mb-8">{dashboard.description}</p>}
-            
-            <div className="space-y-8">
-                {dashboard.items.length > 0 ? (
-                    dashboard.items.map(item => (
-                        <DashboardElement key={item.id} item={item} />
-                    ))
-                ) : (
-                    <div className="text-center py-16 bg-gray-800 rounded-lg">
-                        <p className="text-gray-400">This dashboard is empty.</p>
-                        <p className="text-sm text-gray-500 mt-2">Go to a report to add elements.</p>
+        <>
+            <AddElementDialog
+                open={isAddElementOpen}
+                onOpenChange={setIsAddElementOpen}
+                onElementSelect={handleAddElement}
+            />
+            <div className="p-8">
+                <div className="flex justify-between items-center mb-8">
+                    <div>
+                        <h1 className="text-3xl font-bold text-white mb-2">{dashboard.name}</h1>
+                        {dashboard.description && <p className="text-gray-400">{dashboard.description}</p>}
                     </div>
-                )}
+                    <button onClick={() => setIsAddElementOpen(true)} className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                        <PlusCircle size={16} />
+                        Add Element
+                    </button>
+                </div>
+                
+                <div className="space-y-8">
+                    {dashboard.items.length > 0 ? (
+                        dashboard.items.map(item => (
+                            <DashboardElement key={item.id} item={item} />
+                        ))
+                    ) : (
+                        <div className="text-center py-16 bg-gray-800 rounded-lg">
+                            <p className="text-gray-400">This dashboard is empty.</p>
+                            <p className="text-sm text-gray-500 mt-2">Go to a report to add elements.</p>
+                        </div>
+                    )}
+                </div>
             </div>
-        </div>
+        </>
     );
 }
