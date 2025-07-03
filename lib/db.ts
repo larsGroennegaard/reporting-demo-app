@@ -3,7 +3,6 @@ import { Redis } from '@upstash/redis';
 
 const redis = Redis.fromEnv();
 
-// --- Report Keys and Interfaces ---
 const REPORTS_KEY = 'saved_reports';
 interface SavedReport {
   id: string;
@@ -13,13 +12,21 @@ interface SavedReport {
   createdAt: string;
 }
 
-// --- Dashboard Keys and Interfaces ---
 const DASHBOARDS_KEY = 'dashboards';
+interface DashboardItemLayout {
+    i: string;
+    x: number;
+    y: number;
+    w: number;
+    h: number;
+}
 interface DashboardItem {
     id: string;
-    reportConfig: any;
-    elementType: 'chart' | 'table' | 'kpi';
+    reportConfig?: any; // Optional now
+    elementType: 'chart' | 'table' | 'kpi' | 'textbox';
     kpiMetric?: string;
+    content?: string; // For textbox content
+    layout: DashboardItemLayout;
 }
 interface Dashboard {
   id: string;
@@ -29,25 +36,20 @@ interface Dashboard {
   createdAt: string;
 }
 
-
 // --- Report Functions ---
-
 export async function getAllReports(): Promise<SavedReport[]> {
   const reports = await redis.get<SavedReport[]>(REPORTS_KEY);
   return reports || [];
 }
-
 export async function getReport(id: string): Promise<SavedReport | null> {
   const reports = await getAllReports();
   return reports.find(r => r.id === id) || null;
 }
-
 export async function saveReport(report: SavedReport): Promise<void> {
   const reports = await getAllReports();
   reports.push(report);
   await redis.set(REPORTS_KEY, reports);
 }
-
 export async function updateReport(id: string, name: string, description: string): Promise<SavedReport | null> {
     const reports = await getAllReports();
     const reportIndex = reports.findIndex(r => r.id === id);
@@ -56,7 +58,6 @@ export async function updateReport(id: string, name: string, description: string
     await redis.set(REPORTS_KEY, reports);
     return reports[reportIndex];
 }
-
 export async function deleteReport(id: string): Promise<boolean> {
     const reports = await getAllReports();
     const updatedReports = reports.filter(r => r.id !== id);
@@ -65,19 +66,15 @@ export async function deleteReport(id: string): Promise<boolean> {
     return true;
 }
 
-
 // --- Dashboard Functions ---
-
 export async function getAllDashboards(): Promise<Dashboard[]> {
   const dashboards = await redis.get<Dashboard[]>(DASHBOARDS_KEY);
   return dashboards || [];
 }
-
 export async function getDashboard(id: string): Promise<Dashboard | null> {
   const dashboards = await getAllDashboards();
   return dashboards.find(d => d.id === id) || null;
 }
-
 export async function createDashboard(name: string, description?: string): Promise<Dashboard> {
   const dashboards = await getAllDashboards();
   const newDashboard: Dashboard = {
@@ -91,7 +88,6 @@ export async function createDashboard(name: string, description?: string): Promi
   await redis.set(DASHBOARDS_KEY, dashboards);
   return newDashboard;
 }
-
 export async function updateDashboard(id: string, updates: Partial<Dashboard>): Promise<Dashboard | null> {
   const dashboards = await getAllDashboards();
   const dashIndex = dashboards.findIndex(d => d.id === id);
@@ -100,7 +96,6 @@ export async function updateDashboard(id: string, updates: Partial<Dashboard>): 
   await redis.set(DASHBOARDS_KEY, dashboards);
   return dashboards[dashIndex];
 }
-
 export async function deleteDashboard(id: string): Promise<boolean> {
   const dashboards = await getAllDashboards();
   const updatedDashboards = dashboards.filter(d => d.id !== id);

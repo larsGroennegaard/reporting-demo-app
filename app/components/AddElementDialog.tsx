@@ -11,7 +11,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog';
-import { BarChart2, CheckCircle2 } from 'lucide-react';
+import { BarChart2, CheckCircle2, Type } from 'lucide-react';
 
 interface SavedReport {
   id: string;
@@ -23,7 +23,7 @@ interface SavedReport {
 interface AddElementDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onElementSelect: (reportConfig: any, elementType: 'kpi' | 'chart' | 'table', kpiMetric?: string) => void;
+  onElementSelect: (elementType: 'kpi' | 'chart' | 'table' | 'textbox', reportConfig?: any, kpiMetric?: string) => void;
 }
 
 export default function AddElementDialog({ open, onOpenChange, onElementSelect }: AddElementDialogProps) {
@@ -33,7 +33,7 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
   const [availableElements, setAvailableElements] = useState<any[]>([]);
 
   useEffect(() => {
-    if (open) {
+    if (open && step === 1) {
       const fetchReports = async () => {
         try {
           const res = await fetch('/api/reports');
@@ -44,30 +44,24 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
         }
       };
       fetchReports();
-    } else {
-      // Reset state when dialog closes
+    }
+    if (!open) {
       setStep(1);
       setSelectedReport(null);
-      setAvailableElements([]);
     }
-  }, [open]);
+  }, [open, step]);
 
   useEffect(() => {
     if (selectedReport) {
       const config = selectedReport.config;
       const elements: any[] = [];
       
-      // Add KPI cards
       config.kpiCardConfig.forEach((kpi: any) => elements.push({
         type: 'kpi',
         name: `KPI: ${kpi.metric.replace(/_/g, ' ')}`,
         metric: kpi.metric,
       }));
-
-      // Add Chart
       elements.push({ type: 'chart', name: 'Chart' });
-      
-      // Add Table
       elements.push({ type: 'table', name: 'Table' });
       
       setAvailableElements(elements);
@@ -77,7 +71,7 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
 
   const handleElementClick = (element: any) => {
     if (selectedReport) {
-      onElementSelect(selectedReport.config, element.type, element.metric);
+      onElementSelect(element.type, selectedReport.config, element.metric);
       onOpenChange(false);
     }
   };
@@ -86,23 +80,30 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{step === 1 ? 'Step 1: Select a Report' : `Step 2: Select an Element from "${selectedReport?.name}"`}</DialogTitle>
+          <DialogTitle>{step === 1 ? 'Add an Element' : `Select from "${selectedReport?.name}"`}</DialogTitle>
           <DialogDescription>
             {step === 1 
-                ? 'Choose the report you want to pull an element from.'
-                : 'Choose the specific chart, table, or KPI to add to your dashboard.'
+                ? 'Choose a report to add an element from, or add a new text box.'
+                : 'Choose the specific chart, table, or KPI.'
             }
           </DialogDescription>
         </DialogHeader>
 
         <div className="py-4 space-y-2 max-h-96 overflow-y-auto">
             {step === 1 ? (
-                reports.map(report => (
-                    <button key={report.id} onClick={() => setSelectedReport(report)} className="w-full text-left p-3 flex items-center gap-3 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors">
-                        <BarChart2 className="h-5 w-5 text-indigo-400 shrink-0" />
-                        <span className="flex-grow">{report.name}</span>
+                <>
+                    <button onClick={() => onElementSelect('textbox')} className="w-full text-left p-3 flex items-center gap-3 bg-indigo-600 hover:bg-indigo-700 rounded-md transition-colors text-white">
+                        <Type className="h-5 w-5 shrink-0" />
+                        <span className="flex-grow font-semibold">Add a Text Box</span>
                     </button>
-                ))
+                    <div className="border-b border-gray-700 my-4"></div>
+                    {reports.map(report => (
+                        <button key={report.id} onClick={() => setSelectedReport(report)} className="w-full text-left p-3 flex items-center gap-3 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors">
+                            <BarChart2 className="h-5 w-5 text-indigo-400 shrink-0" />
+                            <span className="flex-grow">{report.name}</span>
+                        </button>
+                    ))}
+                </>
             ) : (
                 availableElements.map(element => (
                      <button key={element.name} onClick={() => handleElementClick(element)} className="w-full text-left p-3 flex items-center gap-3 bg-gray-800 hover:bg-gray-700 rounded-md transition-colors">
@@ -115,7 +116,7 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
         
         {step === 2 && (
              <DialogFooter>
-                <Button variant="outline" onClick={() => setStep(1)}>Back to Reports</Button>
+                <Button variant="outline" onClick={() => { setStep(1); setSelectedReport(null); }}>Back</Button>
             </DialogFooter>
         )}
       </DialogContent>

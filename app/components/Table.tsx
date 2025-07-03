@@ -1,14 +1,12 @@
 // app/components/Table.tsx
 "use client";
 
-// Helper to format numbers for the table
 const formatTableCell = (value: any) => {
     if (typeof value !== 'number') return value;
     if (value % 1 !== 0) return value.toFixed(2);
     return new Intl.NumberFormat('en-US').format(value);
 };
 
-// This helper now handles three distinct modes
 const processTableData = (data: any[], mode: string, config: any) => {
   if (!data || data.length === 0) return { tableHeaders: [], tableRows: [] };
 
@@ -30,13 +28,11 @@ const processTableData = (data: any[], mode: string, config: any) => {
     });
 
     const segments = data.map(item => item.segment || 'Unknown');
-    // THE FIX: Changed from spread operator to Array.from() for compatibility
     const tableHeaders = ['Metric', ...Array.from(new Set(segments))];
     const tableRows = Object.values(pivoted);
     return { tableHeaders, tableRows };
   } 
   
-  // This is the original time_series pivot logic
   const pivoted: { [key: string]: any } = {};
   const timeUnits = new Set<string>();
 
@@ -51,7 +47,7 @@ const processTableData = (data: any[], mode: string, config: any) => {
     const tableHeaders = ['Segment', ...Array.from(timeUnits)];
     return { tableHeaders, tableRows: Object.values(pivoted) };
 
-  } else { // multi_metric
+  } else {
     const metrics = config.multiChartMetrics || [];
     metrics.forEach((metric: string) => { pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') }; });
     data.forEach((item: any) => {

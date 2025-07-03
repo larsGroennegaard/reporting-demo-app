@@ -12,7 +12,6 @@ const formatYAxisTick = (tick: any) => {
   return String(Math.round(tick));
 };
 
-// Formatter for tooltips to round numbers
 const formatTooltipValue = (value: any) => {
     if (typeof value !== 'number') return value;
     if (value % 1 !== 0) return value.toFixed(2);
@@ -48,7 +47,7 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
   }
 
   
-  // Line Chart for Time Series Focus (with its own data processing)
+  // Line Chart for Time Series Focus
   const processLineChartData = () => {
     if (config.chartMode === 'single_segmented') {
       const pivotedData: { [key: string]: any } = {};
@@ -61,7 +60,7 @@ export default function Chart({ data, mode, config }: { data: any[], mode: strin
         segments.add(segmentName);
       });
       return { chartData: Object.values(pivotedData), keys: Array.from(segments) };
-    } else { // 'multi_metric'
+    } else {
       const keys = Object.keys(data[0] || {}).filter(key => key !== 'month');
       const chartData = data.map(row => ({ ...row, month: new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) }));
       return { chartData, keys };
