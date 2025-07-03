@@ -36,7 +36,7 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
   };
 
   return (
-    <div className="flex flex-col h-full bg-gray-800 text-gray-200">
+    <div className="flex flex-col flex-grow bg-gray-800 text-gray-200 min-h-0">
       {/* Message display area */}
       <div className="flex-grow p-4 space-y-4 overflow-y-auto">
         {messages.map((msg, index) => (
@@ -59,7 +59,7 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
       </div>
 
       {/* Input form */}
-      <div className="p-4 border-t border-gray-700">
+      <div className="p-4 border-t border-gray-700 flex-shrink-0">
         <form onSubmit={handleSubmit} className="relative">
           <textarea
             value={inputValue}

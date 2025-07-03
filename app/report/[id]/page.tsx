@@ -509,7 +509,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
                 </Button>
             </div>
 
-            <div className={cn("flex-grow overflow-y-auto", isConfigPanelCollapsed && "hidden")}>
+            <div className={cn("flex flex-col flex-grow overflow-y-auto min-h-0", isConfigPanelCollapsed && "hidden")}>
                 <div className="p-4 border-b border-gray-700">
                     <div className="flex bg-gray-700 rounded-md p-1">
                         <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>

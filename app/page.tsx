@@ -28,7 +28,7 @@ export default function HomePage() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-gray-900 p-4">
+    <div className="flex h-full items-start justify-center bg-gray-900 p-4 pt-48">
       <div className="w-full max-w-2xl text-center">
         <Search size={48} className="mx-auto text-gray-500 mb-4" />
         <h1 className="text-4xl font-bold text-white mb-2">
@@ -38,12 +38,12 @@ export default function HomePage() {
           Prompt your way to GTM insights
         </p>
         <form onSubmit={handlePrompt} className="relative mb-8">
-          <input
-            type="text"
+          <textarea
+            rows={3}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g., How much pipeline did we generate last quarter?"
-            className="w-full rounded-md border-gray-600 bg-gray-800 p-4 pr-12 text-lg text-white shadow-lg focus:border-indigo-500 focus:ring-indigo-500"
+            className="w-full rounded-md border-gray-600 bg-gray-800 p-4 pr-12 text-lg text-white shadow-lg focus:border-indigo-500 focus:ring-indigo-500 resize-none"
           />
           <button
             type="submit"
