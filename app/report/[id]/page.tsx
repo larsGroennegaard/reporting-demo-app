@@ -1,5 +1,5 @@
 // app/report/[id]/page.tsx
-"use client"; 
+"use client";
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import KpiCard from '../../components/KpiCard';
@@ -130,6 +130,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
   const [kpiData, setKpiData] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [dropdownsLoaded, setDropdownsLoaded] = useState(false);
 
   // Dropdown options
   const [stageOptions, setStageOptions] = useState<string[]>([]);
@@ -183,12 +184,19 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         setEventNameOptions((data.eventNames || []).map((e: string) => ({ value: e, label: e })));
         setSignalOptions((data.signalNames || []).map((s: string) => ({ value: s, label: s })));
         setChannelOptions((data.channels || []).map((c: string) => ({ value: c, label: c })));
-      } catch (error) { console.error("Failed to fetch dropdown options:", error); }
+        setDropdownsLoaded(true); // Signal that dropdowns are ready
+      } catch (error) { 
+        console.error("Failed to fetch dropdown options:", error); 
+        setDropdownsLoaded(true); // Still proceed, even on error
+      }
     };
     fetchDropdownOptions();
   }, []);
 
   useEffect(() => {
+    // Wait for dropdowns before processing initial prompt or loading saved report
+    if (!dropdownsLoaded) return;
+
     const initialPrompt = searchParams?.prompt;
     if (typeof initialPrompt === 'string' && params.id === 'new' && !promptSubmitted.current) {
         promptSubmitted.current = true;
@@ -215,7 +223,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         };
         fetchReport();
     }
-  }, [params.id, searchParams]);
+  }, [params.id, searchParams, dropdownsLoaded]);
 
   useEffect(() => {
     if (reportArchetype === 'outcome_analysis') {

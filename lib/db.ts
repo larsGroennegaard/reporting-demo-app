@@ -1,14 +1,37 @@
 // lib/db.ts
+import { Redis } from '@upstash/redis';
 
-// This trick ensures the in-memory array is not reset during hot-reloading in development.
-// It attaches the array to the global object, which persists across reloads.
+// The Upstash client will use the environment variables automatically
+// added to your project when you connected the database.
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL!,
+  token: process.env.KV_REST_API_TOKEN!,
+});
 
-declare const global: {
-  savedReports: any[];
-};
+const REPORTS_KEY = 'saved_reports';
 
-if (!global.savedReports) {
-  global.savedReports = [];
+interface SavedReport {
+  id: string;
+  name: string;
+  config: any;
+  createdAt: string;
 }
 
-export const savedReports = global.savedReports;
+// Function to get all reports
+export async function getAllReports(): Promise<SavedReport[]> {
+  const reports = await redis.get<SavedReport[]>(REPORTS_KEY);
+  return reports || [];
+}
+
+// Function to get a single report by ID
+export async function getReport(id: string): Promise<SavedReport | null> {
+  const reports = await getAllReports();
+  return reports.find(r => r.id === id) || null;
+}
+
+// Function to save a new report
+export async function saveReport(report: SavedReport): Promise<void> {
+  const reports = await getAllReports();
+  reports.push(report);
+  await redis.set(REPORTS_KEY, reports);
+}
