@@ -19,10 +19,10 @@ const geistMono = Geist_Mono({
 });
 
 // This part can be uncommented if you need static metadata
-// export const metadata: Metadata = {
-//   title: "Reporting Demo App",
-//   description: "A demo app for building reports from BigQuery.",
-// };
+export const metadata: Metadata = {
+   title: "Dreamdata Report Prototype",
+   description: "A demo app for our LLM based new reporting prototype",
+ };
 
 export default function RootLayout({
   children,
