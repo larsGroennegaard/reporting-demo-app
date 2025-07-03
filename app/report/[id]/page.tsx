@@ -299,9 +299,9 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Got the data - now I just have to build your report...' } : m));
 
     } catch (error) {
-        console.error("Failed to generate config from prompt:", error);
+        console.error("Something went wrong and I couldn't generate a report from prompt:", error);
         setIsGenerating(false);
-        const errorMessage = error instanceof Error ? error.message : 'Sorry, I had trouble understanding that. Could you try rephrasing?';
+        const errorMessage = error instanceof Error ? error.message : 'Sorry, this was too hard for me. Could you try rephrasing?';
         setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'bot', text: errorMessage } : m));
     }
   };
