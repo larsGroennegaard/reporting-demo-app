@@ -4,10 +4,10 @@ import { savedReports } from '@/lib/db'; // Import the shared array
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  context: { params: { id: string } }
 ) {
   try {
-    const { id } = params;
+    const { id } = context.params;
     
     // Now searching in our shared in-memory "database"
     const report = savedReports.find(r => r.id === id);
