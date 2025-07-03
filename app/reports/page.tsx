@@ -3,7 +3,6 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import useLocalStorage from '@/hooks/useLocalStorage';
 import { BarChart2, ChevronRight } from 'lucide-react';
 
 interface SavedReport {
@@ -14,15 +13,30 @@ interface SavedReport {
 }
 
 export default function ReportsPage() {
-  const [savedReports, setSavedReports] = useLocalStorage<SavedReport[]>('savedReports', []);
-  const [isClient, setIsClient] = useState(false);
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    setIsClient(true);
+    const fetchReports = async () => {
+      try {
+        const response = await fetch('/api/reports');
+        if (!response.ok) {
+          throw new Error('Failed to fetch reports');
+        }
+        const data = await response.json();
+        setSavedReports(data);
+      } catch (error) {
+        console.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReports();
   }, []);
 
-  if (!isClient) {
-    return null; // Or a loading spinner
+  if (isLoading) {
+    return <div className="p-8 text-white">Loading reports...</div>;
   }
 
   return (

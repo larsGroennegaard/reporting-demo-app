@@ -8,7 +8,6 @@ import Table from '../../components/Table';
 import { MultiSelectFilter, OptionType } from '../../components/MultiSelectFilter';
 import { X, Save, PanelLeftClose, PanelRightClose, MessageSquare, SlidersHorizontal, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import ChatInterface from '../../components/ChatInterface';
-import useLocalStorage from '@/hooks/useLocalStorage';
 import SaveReportDialog from '@/app/components/SaveReportDialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -104,7 +103,6 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
   const searchParams = React.use(searchParamsPromise);
 
   const promptSubmitted = useRef(false);
-  const [savedReports, setSavedReports] = useLocalStorage<SavedReport[]>('savedReports', []);
   const [isSaveDialogOpen, setIsSaveDialogOpen] = useState(false);
   const [isConfigPanelCollapsed, setIsConfigPanelCollapsed] = useState(false);
 
@@ -196,18 +194,28 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         promptSubmitted.current = true;
         handleQuerySubmit(initialPrompt);
     } else if (params.id && params.id !== 'new') {
-        const reportToLoad = savedReports.find(r => r.id === params.id);
-        if (reportToLoad) {
-            const { config } = reportToLoad;
-            setReportArchetype(config.reportArchetype);
-            if (config.reportArchetype === 'outcome_analysis') {
-                setOutcomeConfig({ ...defaultOutcomeConfig, ...config });
-            } else {
-                setEngagementConfig({ ...defaultEngagementConfig, ...config });
+        const fetchReport = async () => {
+            try {
+                const res = await fetch(`/api/reports/${params.id}`);
+                if (res.ok) {
+                    const reportToLoad = await res.json();
+                     if (reportToLoad) {
+                        const { config } = reportToLoad;
+                        setReportArchetype(config.reportArchetype);
+                        if (config.reportArchetype === 'outcome_analysis') {
+                            setOutcomeConfig({ ...defaultOutcomeConfig, ...config });
+                        } else {
+                            setEngagementConfig({ ...defaultEngagementConfig, ...config });
+                        }
+                    }
+                }
+            } catch (error) {
+                console.error("Failed to fetch report", error);
             }
-        }
+        };
+        fetchReport();
     }
-  }, [params.id, searchParams, savedReports]);
+  }, [params.id, searchParams]);
 
   useEffect(() => {
     if (reportArchetype === 'outcome_analysis') {
@@ -351,14 +359,22 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
     handleConfigChange('kpiCardConfig', newKpiConfig);
   };
   
-  const handleSaveReport = (name: string) => {
+  const handleSaveReport = async (name: string) => {
     const newReport: SavedReport = {
       id: Date.now().toString(),
       name,
       config: { reportArchetype, ...currentConfig },
       createdAt: new Date().toISOString(),
     };
-    setSavedReports([...savedReports, newReport]);
+    try {
+        await fetch('/api/reports', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newReport)
+        });
+    } catch (error) {
+        console.error("Failed to save report:", error);
+    }
   };
   
   // --- RENDER FUNCTION ---
