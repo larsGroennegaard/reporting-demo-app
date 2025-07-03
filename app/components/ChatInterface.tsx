@@ -64,6 +64,7 @@ export default function ChatInterface({ onQuerySubmit, messages, isGenerating }:
           <textarea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleKeyDown}
             placeholder="Ask a follow-up question..."
             className="w-full bg-gray-700 border-gray-600 text-white rounded-md p-3 pr-12 text-sm focus:ring-indigo-500 focus:border-indigo-500 resize-none"
             rows={3}
