@@ -34,6 +34,7 @@ function DashboardElement({ item }: { item: DashboardItem }) {
         const fetchData = async () => {
             setIsLoading(true);
             try {
+                // The API key is removed here as it's not needed for client-side fetches to your own API
                 const response = await fetch('/api/report', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
