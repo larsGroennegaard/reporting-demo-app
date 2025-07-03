@@ -12,12 +12,12 @@ export default function PageLayout({
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
-    <div className="flex h-screen bg-gray-900 text-gray-300">
+    <div className="flex h-screen bg-background text-foreground">
       <SideNav 
         isCollapsed={isSidebarCollapsed} 
         toggleSidebar={() => setIsSidebarCollapsed(!isSidebarCollapsed)} 
       />
-      <div className="w-px bg-gray-700" />
+      <div className="w-px bg-border" />
       <main className="flex-1 overflow-y-auto">{children}</main>
     </div>
   );

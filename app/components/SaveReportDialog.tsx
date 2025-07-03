@@ -31,7 +31,7 @@ export default function SaveReportDialog({ open, onOpenChange, onSave }: SaveRep
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="bg-gray-800 text-white border-gray-700">
+      <DialogContent>
         <DialogHeader>
           <DialogTitle>Save Report</DialogTitle>
           <DialogDescription>
@@ -44,7 +44,7 @@ export default function SaveReportDialog({ open, onOpenChange, onSave }: SaveRep
             value={reportName}
             onChange={(e) => setReportName(e.target.value)}
             placeholder="e.g., Q1 Marketing Pipeline"
-            className="w-full rounded-md border-gray-600 bg-gray-700 p-2 text-white shadow-inner focus:border-indigo-500 focus:ring-indigo-500"
+            className="w-full rounded-md border-input bg-background p-2 text-foreground shadow-inner focus:border-ring focus:ring-ring"
             onKeyDown={(e) => e.key === 'Enter' && handleSaveClick()}
           />
         </div>
