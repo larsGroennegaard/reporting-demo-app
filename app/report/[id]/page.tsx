@@ -118,7 +118,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
   // --- CHAT-RELATED STATE ---
   const [activeView, setActiveView] = useState<'prompt' | 'configure'>('prompt');
   const [messages, setMessages] = useState<Message[]>([
-      { sender: 'bot', text: "Hello! Describe the report you'd like to see." }
+      { sender: 'bot', text: "What would you love to know?" }
   ]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [currentQuery, setCurrentQuery] = useState('');
