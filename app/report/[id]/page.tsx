@@ -6,7 +6,7 @@ import KpiCard from '../../components/KpiCard';
 import Chart from '../../components/Chart';
 import Table from '../../components/Table';
 import { MultiSelectFilter, OptionType } from '../../components/MultiSelectFilter';
-import { X, Save, PanelLeftClose, PanelRightClose } from 'lucide-react';
+import { X, Save, PanelLeftClose, PanelRightClose, MessageSquare, SlidersHorizontal, ChevronsRight, ChevronsLeft } from 'lucide-react';
 import ChatInterface from '../../components/ChatInterface';
 import useLocalStorage from '@/hooks/useLocalStorage';
 import SaveReportDialog from '@/app/components/SaveReportDialog';
@@ -124,11 +124,11 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
   const [currentQuery, setCurrentQuery] = useState('');
 
   // UI and Data Fetching State
-  const [isGeneralSettingsOpen, setIsGeneralSettingsOpen] = useState(true);
-  const [isMetricsOpen, setIsMetricsOpen] = useState(true);
-  const [isFiltersOpen, setIsFiltersOpen] = useState(true);
-  const [isKpiConfigOpen, setIsKpiConfigOpen] = useState(true);
-  const [isChartTableSettingsOpen, setIsChartTableSettingsOpen] = useState(true);
+  const [isGeneralSettingsOpen, setIsGeneralSettingsOpen] = useState(false);
+  const [isMetricsOpen, setIsMetricsOpen] = useState(false);
+  const [isFiltersOpen, setIsFiltersOpen] = useState(false);
+  const [isKpiConfigOpen, setIsKpiConfigOpen] = useState(false);
+  const [isChartTableSettingsOpen, setIsChartTableSettingsOpen] = useState(false);
   const [kpiData, setKpiData] = useState<any>(null);
   const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -396,8 +396,8 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
     );
 
     return (
-      <div className="p-6 space-y-4">
-        <div>
+      <div className="p-6 space-y-4 divide-y divide-gray-700">
+        <div className="pt-4">
           <button onClick={() => setIsGeneralSettingsOpen(!isGeneralSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white">
               <span>General Settings</span>
               <span className="text-xs">{isGeneralSettingsOpen ? '▼' : '►'}</span>
@@ -409,8 +409,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
             </div>
           )}
         </div>
-        <div className="border-t border-gray-700 my-4" />
-        <div><button onClick={() => setIsMetricsOpen(!isMetricsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Metrics</span><span className="text-xs">{isMetricsOpen ? '▼' : '►'}</span></button>
+        <div className="pt-4"><button onClick={() => setIsMetricsOpen(!isMetricsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Metrics</span><span className="text-xs">{isMetricsOpen ? '▼' : '►'}</span></button>
           {isMetricsOpen && (isOutcome ? 
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4">{stageOptions.map(stage => (<div key={stage}><p className="font-medium text-white">{stage}</p><div className="pl-2 mt-1 space-y-1"><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('deals')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'deals', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2"># Deals</span></label><label className="flex items-center"><input type="checkbox" checked={outcomeConfig.selectedMetrics[stage]?.includes('value')} onChange={(e) => setMetric(`selectedMetrics.${stage}`, 'value', e.target.checked)} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">Value</span></label></div></div>))}</div>
             :
@@ -437,8 +436,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
             </div>
           )}
         </div>
-        <div className="border-t border-gray-700 my-4" />
-        <div><button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Filters</span><span className="text-xs">{isFiltersOpen ? '▼' : '►'}</span></button>
+        <div className="pt-4"><button onClick={() => setIsFiltersOpen(!isFiltersOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Filters</span><span className="text-xs">{isFiltersOpen ? '▼' : '►'}</span></button>
           {isFiltersOpen && (isOutcome ?
             <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">
                 <div><label className="block text-sm font-medium text-gray-400 mb-1">Time Period</label>{timePeriodOptions}</div>
@@ -464,8 +462,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
             </div>
           )}
         </div>
-        <div className="border-t border-gray-700 my-4" />
-        <div>
+        <div className="pt-4">
           <button onClick={() => setIsKpiConfigOpen(!isKpiConfigOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>KPI Card Configuration</span><span className="text-xs">{isKpiConfigOpen ? '▼' : '►'}</span></button>
           {isKpiConfigOpen && <div className="mt-2 space-y-2 border-l-2 border-gray-700 pl-4 pt-2">
               {config.kpiCardConfig.map((card, index) => (
@@ -480,8 +477,7 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
               <button onClick={addKpiCard} className="mt-2 w-full text-sm bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded disabled:bg-gray-500" disabled={allAvailableMetrics.length === 0}>+ Add KPI Card</button>
           </div>}
         </div>
-        <div className="border-t border-gray-700 my-4" />
-        <div><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetricsForChart.length === 0}>{availableMetricsForChart.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div></div>) : (<div className="mt-4 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
+        <div className="pt-4"><button onClick={() => setIsChartTableSettingsOpen(!isChartTableSettingsOpen)} className="w-full flex justify-between items-center text-left text-lg font-semibold text-gray-100 hover:text-white"><span>Chart & Table Settings</span><span className="text-xs">{isChartTableSettingsOpen ? '▼' : '►'}</span></button>{isChartTableSettingsOpen && <div className="mt-2 space-y-4 border-l-2 border-gray-700 pl-4 pt-2">{config.reportFocus === 'time_series' ? (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Time Series Chart</h3><fieldset className="space-y-2"><legend className="text-sm font-medium text-gray-400">Chart Mode</legend><div className="flex items-center space-x-4"><label className="flex items-center"><input type="radio" name="chartMode" value="single_segmented" checked={config.chartMode === 'single_segmented'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Breakdown</span></label><label className="flex items-center"><input type="radio" name="chartMode" value="multi_metric" checked={config.chartMode === 'multi_metric'} onChange={(e) => setState('chartMode', e.target.value)} className="h-4 w-4 text-indigo-600 border-gray-300"/><span className="ml-2">Multiple Metrics</span></label></div></fieldset>{config.chartMode === 'single_segmented' ? (<div className="mt-4 space-y-4"><div><label className="block text-sm font-medium text-gray-400">Metric</label><select value={config.singleChartMetric} onChange={(e) => setState('singleChartMetric', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md" disabled={availableMetricsForChart.length === 0}>{availableMetricsForChart.map(m => <option key={m} value={m}>{m.replace(/_/g, ' ')}</option>)}</select></div><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div></div>) : (<div className="mt-4 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div>)}</div>) : (<div><h3 className="text-md font-semibold mb-2 text-gray-200">Segmentation Chart & Table</h3><div className="space-y-4"><div><label className="block text-sm font-medium text-gray-400">Breakdown by</label><select value={config.segmentationProperty} onChange={(e) => setState('segmentationProperty', e.target.value)} className="mt-1 block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md">{breakdownOptions}</select></div><div><label className="block text-sm font-medium text-gray-400">Metrics to Display</label><div className="mt-2 space-y-2">{availableMetricsForChart.map(metric => (<label key={metric} className="flex items-center"><input type="checkbox" checked={config.multiChartMetrics.includes(metric)} onChange={() => setState('multiChartMetrics', config.multiChartMetrics.includes(metric) ? config.multiChartMetrics.filter(m => m !== metric) : [...config.multiChartMetrics, metric])} className="h-4 w-4 rounded border-gray-300 text-indigo-600" /><span className="ml-2">{metric.replace(/_/g, ' ')}</span></label>))}</div></div></div></div>)}</div>}</div>
       </div>
     );
   }
@@ -494,26 +490,49 @@ export default function ReportPage({ params: paramsPromise, searchParams: search
         onOpenChange={setIsSaveDialogOpen}
         onSave={handleSaveReport}
       />
-      <div className="flex h-full relative">
+      <div className="flex h-full">
         <div className={cn(
           "bg-gray-800 shadow-lg transition-all duration-300 ease-in-out flex flex-col",
-          isConfigPanelCollapsed ? "w-0 opacity-0" : "w-1/3 max-w-md"
+          isConfigPanelCollapsed ? "w-20" : "w-1/3 max-w-md"
         )}>
-          <div className={cn("flex flex-col h-full", isConfigPanelCollapsed && "invisible")}>
-            <div className="p-4 border-b border-gray-700 flex-shrink-0">
-                <div className="flex bg-gray-700 rounded-md p-1">
-                    <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
-                    <button onClick={() => setActiveView('configure')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'configure' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Configure</button>
-                </div>
+            <div className="flex items-center justify-between p-4 border-b border-gray-700 flex-shrink-0">
+                <h2 className={cn("text-xl font-semibold text-white", isConfigPanelCollapsed && "sr-only")}>
+                    Report Builder
+                </h2>
+                <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setIsConfigPanelCollapsed(!isConfigPanelCollapsed)} 
+                    className="h-8 w-8"
+                >
+                    {isConfigPanelCollapsed ? <ChevronsRight className="h-5 w-5" /> : <ChevronsLeft className="h-5 w-5" />}
+                </Button>
             </div>
-            <div className="flex-grow overflow-y-auto">
+
+            <div className={cn("flex-grow overflow-y-auto", isConfigPanelCollapsed && "hidden")}>
+                <div className="p-4 border-b border-gray-700">
+                    <div className="flex bg-gray-700 rounded-md p-1">
+                        <button onClick={() => setActiveView('prompt')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Prompt</button>
+                        <button onClick={() => setActiveView('configure')} className={`w-1/2 py-2 text-sm font-medium rounded ${activeView === 'configure' ? 'bg-indigo-600 text-white' : 'text-gray-300 hover:bg-gray-600'}`}>Configure</button>
+                    </div>
+                </div>
                 {activeView === 'prompt' ? (
-                <ChatInterface onQuerySubmit={handleQuerySubmit} messages={messages} isGenerating={isGenerating} />
+                    <ChatInterface onQuerySubmit={handleQuerySubmit} messages={messages} isGenerating={isGenerating} />
                 ) : (
-                renderConfigurationPanels()
+                    renderConfigurationPanels()
                 )}
             </div>
-          </div>
+
+            {isConfigPanelCollapsed && (
+            <div className="flex flex-col items-center justify-center h-full text-gray-500 space-y-4">
+                <button onClick={() => setActiveView('prompt')} className={cn("p-2 rounded-md", activeView === 'prompt' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-700')}>
+                    <MessageSquare size={24} />
+                </button>
+                <button onClick={() => setActiveView('configure')} className={cn("p-2 rounded-md", activeView === 'configure' ? 'bg-indigo-600 text-white' : 'hover:bg-gray-700')}>
+                    <SlidersHorizontal size={24} />
+                </button>
+            </div>
+            )}
         </div>
         
         <div className="flex-shrink-0 bg-gray-700 w-px" />
