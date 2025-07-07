@@ -131,6 +131,7 @@ export default function ReportPage() {
             handleQuerySubmit(initialPrompt);
         } else {
             setReportState(initialReportState);
+            setActiveView('configure');
         }
     }, [id, router, searchParams]);
 
@@ -386,6 +387,18 @@ export default function ReportPage() {
                         <ChatInterface onQuerySubmit={handleQuerySubmit} messages={messages} isGenerating={isGenerating} />
                     ) : (
                         <div className="overflow-y-auto">
+                            <div className="p-4 border-b border-gray-700">
+                                <label className="block text-sm font-medium text-gray-300 mb-1">Report Type</label>
+                                <select
+                                    value={reportState.reportArchetype || ''}
+                                    onChange={(e) => handleArchetypeChange(e.target.value)}
+                                    className="block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white sm:text-sm rounded-md"
+                                >
+                                    <option value="" disabled>-- Select a report type --</option>
+                                    <option value="outcome_analysis">Outcome Analysis</option>
+                                    <option value="engagement_analysis">Engagement Analysis</option>
+                                </select>
+                            </div>
                             {reportState.reportArchetype ? (
                                 <>
                                    <Section title="1. Report Settings" isOpen={openSections.settings} onToggle={() => toggleSection('settings')}>
@@ -409,7 +422,7 @@ export default function ReportPage() {
                                         />
                                    </Section>
                                 </>
-                            ) : <p className="p-4 text-gray-400">Select a report type to begin.</p>}
+                            ) : null }
                         </div>
                     )}
                 </div>
