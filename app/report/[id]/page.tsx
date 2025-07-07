@@ -89,7 +89,7 @@ export default function ReportPage() {
             const fetchReport = async () => {
                 setIsLoading(true);
                 try {
-                    const res = await fetch(`/api/v2/reports/${id}`);
+                    const res = await fetch(`/api/reports/${id}`);
                     if (res.ok) {
                         const reportToLoad = await res.json();
                         setReportState(reportToLoad);
@@ -241,11 +241,11 @@ export default function ReportPage() {
     
     const handleSave = async () => {
         try {
-            const reportToSave = { ...reportState };
+            const reportToSave = { ...reportState, id: reportState.id || Date.now().toString() };
             let response;
-            if (id === 'new' || !reportState.id) {
+            if (id === 'new') {
                 // Create new report
-                response = await fetch('/api/v2/reports', {
+                response = await fetch('/api/reports', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reportToSave)
@@ -258,7 +258,7 @@ export default function ReportPage() {
                 }
             } else {
                 // Update existing report
-                response = await fetch(`/api/v2/reports/${id}`, {
+                response = await fetch(`/api/reports/${id}`, {
                     method: 'PUT',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(reportToSave)
