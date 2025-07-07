@@ -129,7 +129,7 @@ export default function ReportPage() {
             promptSubmitted.current = true;
             setActiveView('prompt');
             handleQuerySubmit(initialPrompt);
-        } else {
+        } else if (!promptSubmitted.current) {
             setReportState(initialReportState);
             setActiveView('configure');
         }
