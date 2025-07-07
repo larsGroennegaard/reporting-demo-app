@@ -208,8 +208,7 @@ export default function ReportPage() {
 
             const data = await response.json();
             setReportState(data.config);
-            setCurrentQuery(query); // This will trigger the useEffect to fetch data
-            setActiveView('configure'); // Switch to configure view to show results
+            setCurrentQuery(query);
             setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Fetching data...' } : m));
 
         } catch (error) {
