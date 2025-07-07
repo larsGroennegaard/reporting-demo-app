@@ -11,7 +11,7 @@ const processTableData = (data: any[], mode: string, config: any) => {
   if (!data || data.length === 0) return { tableHeaders: [], tableRows: [] };
 
   if (mode === 'segmentation') {
-    const metrics = config.multiChartMetrics || [];
+    const metrics = config.chart?.metrics || [];
     const pivoted: { [key: string]: any } = {};
     
     metrics.forEach((metric: string) => {
@@ -36,7 +36,7 @@ const processTableData = (data: any[], mode: string, config: any) => {
   const pivoted: { [key: string]: any } = {};
   const timeUnits = new Set<string>();
 
-  if (config.chartMode === 'single_segmented') {
+  if (config.chart?.variant === 'time_series_segmented') {
     data.forEach((item: any) => {
       const segment = item.segment || 'Unknown';
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -47,8 +47,8 @@ const processTableData = (data: any[], mode: string, config: any) => {
     const tableHeaders = ['Segment', ...Array.from(timeUnits)];
     return { tableHeaders, tableRows: Object.values(pivoted) };
 
-  } else {
-    const metrics = config.multiChartMetrics || [];
+  } else { // time_series_line
+    const metrics = config.chart?.metrics || [];
     metrics.forEach((metric: string) => { pivoted[metric] = { rowHeader: metric.replace(/_/g, ' ') }; });
     data.forEach((item: any) => {
       const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
@@ -62,13 +62,13 @@ const processTableData = (data: any[], mode: string, config: any) => {
   }
 };
 
-export default function Table({ data, mode, config }: { data: any[], mode: string, config: any }) {
+export default function Table({ data, mode, config, title }: { data: any[], mode: string, config: any, title?: string }) {
   const { tableHeaders, tableRows } = processTableData(data, mode, config);
 
   if (tableRows.length === 0) {
     return (
         <div className="bg-gray-800 p-6 shadow rounded-lg">
-            <h3 className="text-lg font-semibold text-gray-100">Data Table</h3>
+            <h3 className="text-lg font-semibold text-gray-100">{title || 'Data Table'}</h3>
             <p className="text-gray-400 mt-2">No data available to display.</p>
         </div>
     );
@@ -76,7 +76,7 @@ export default function Table({ data, mode, config }: { data: any[], mode: strin
 
   return (
     <div className="bg-gray-800 p-6 shadow rounded-lg">
-      <h3 className="text-lg font-semibold text-gray-100 mb-4">Data Table</h3>
+      <h3 className="text-lg font-semibold text-gray-100 mb-4">{title || 'Data Table'}</h3>
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-700">
           <thead className="bg-gray-700"><tr>{tableHeaders.map(header => (<th key={header} scope="col" className="py-3.5 px-4 text-left text-sm font-semibold text-white">{header}</th>))}</tr></thead>

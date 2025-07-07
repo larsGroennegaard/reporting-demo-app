@@ -1,0 +1,75 @@
+// config/engagementPanelConfig.ts
+
+export const engagementPanelConfig = [
+   {
+    id: 'timePeriod',
+    label: 'Time Period',
+    type: 'select',
+    section: 'filters',
+    options: [
+        { value: 'this_month', label: 'This Month' },
+        { value: 'this_quarter', label: 'This Quarter' },
+        { value: 'this_year', label: 'This Year' },
+        { value: 'last_month', label: 'Last Month' },
+        { value: 'last_quarter', label: 'Last Quarter' },
+        { value: 'last_year', label: 'Last Year' },
+        { value: 'last_3_months', label: 'Last 3 Months' },
+        { value: 'last_6_months', label: 'Last 6 Months' },
+        { value: 'last_12_months', label: 'Last 12 Months' },
+    ],
+  },
+   {
+    id: 'funnelLength',
+    label: 'Funnel Length',
+    type: 'select',
+    section: 'filters',
+    options: [
+        { value: 'unlimited', label: 'Unlimited' },
+        { value: '30', label: '30 days' },
+        { value: '60', label: '60 days' },
+        { value: '90', label: '90 days' },
+    ],
+  },
+  {
+    id: 'filters.selectedChannels',
+    label: 'Channel',
+    type: 'multiselect',
+    section: 'filters',
+    optionsSource: 'channelOptions',
+    placeholder: 'Select channels...',
+  },
+  {
+    id: 'filters.eventNames',
+    label: 'Event Name',
+    type: 'multiselect',
+    section: 'filters',
+    optionsSource: 'eventNameOptions',
+    placeholder: 'Select events...',
+  },
+  {
+    id: 'filters.signals',
+    label: 'Signal',
+    type: 'multiselect',
+    section: 'filters',
+    optionsSource: 'signalOptions',
+    placeholder: 'Select signals...',
+  },
+  {
+    id: 'filters.url',
+    label: 'URL Contains',
+    type: 'text-input',
+    section: 'filters',
+  },
+  {
+    id: 'metrics',
+    label: 'Metrics / KPIs',
+    type: 'metric-group',
+    section: 'kpis',
+    optionsSource: 'stageOptions',
+  },
+  {
+    id: 'chartAndTable',
+    type: 'chart-table-settings',
+    section: 'visualizations',
+  },
+];
