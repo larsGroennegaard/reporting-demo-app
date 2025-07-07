@@ -20,7 +20,7 @@ export default function ReportsPage() {
   const fetchReports = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/v2/reports');
+      const response = await fetch('/api/reports');
       if (!response.ok) throw new Error('Failed to fetch reports');
       const data = await response.json();
       setReports(data);
@@ -38,7 +38,7 @@ export default function ReportsPage() {
   const handleDelete = async (id: string) => {
     if (confirm('Are you sure you want to delete this report?')) {
       try {
-        await fetch(`/api/v2/reports/${id}`, { method: 'DELETE' });
+        await fetch(`/api/reports/${id}`, { method: 'DELETE' });
         fetchReports();
       } catch (error) {
         console.error('Failed to delete report:', error);

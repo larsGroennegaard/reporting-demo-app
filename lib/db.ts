@@ -50,11 +50,11 @@ export async function saveReport(report: SavedReport): Promise<void> {
   reports.push(report);
   await redis.set(REPORTS_KEY, reports);
 }
-export async function updateReport(id: string, name: string, description: string): Promise<SavedReport | null> {
+export async function updateReport(id: string, reportData: Partial<SavedReport>): Promise<SavedReport | null> {
     const reports = await getAllReports();
     const reportIndex = reports.findIndex(r => r.id === id);
     if (reportIndex === -1) return null;
-    reports[reportIndex] = { ...reports[reportIndex], name, description };
+    reports[reportIndex] = { ...reports[reportIndex], ...reportData };
     await redis.set(REPORTS_KEY, reports);
     return reports[reportIndex];
 }

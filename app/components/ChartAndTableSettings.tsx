@@ -70,14 +70,14 @@ export default function ChartAndTableSettings({
       
       {reportFocus === 'time_series' && (
         <div>
-          <label className="block text-sm font-medium text-gray-300 mb-2">Chart Type</label>
+          <label className="block text-sm font-medium text-gray-300 mb-2">Display Mode</label>
            <select 
              value={chartConfig.variant} 
              onChange={(e) => handleChartVariantChange(e.target.value)}
              className="block w-full pl-3 pr-10 py-2 text-base bg-gray-700 border-gray-600 text-white focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
             >
-            <option value="time_series_line">Multi-Metric Line Chart</option>
-            <option value="time_series_segmented">Single Metric by Segment</option>
+            <option value="time_series_line">Compare multiple metrics over time</option>
+            <option value="time_series_segmented">Break down a single metric by segment</option>
           </select>
         </div>
       )}

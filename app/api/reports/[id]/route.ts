@@ -28,8 +28,8 @@ export async function PUT(
 ) {
   try {
     const { id } = await params;
-    const { name, description } = await request.json();
-    const updatedReport = await updateReport(id, name, description);
+    const body = await request.json();
+    const updatedReport = await updateReport(id, body);
 
     if (updatedReport) {
       return NextResponse.json(updatedReport);

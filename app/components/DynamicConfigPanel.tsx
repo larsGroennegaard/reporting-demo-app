@@ -34,11 +34,24 @@ export default function DynamicConfigPanel({
   const controlsForSection = config.filter(c => c.section === section);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-4">
       {controlsForSection.map((control) => {
         const { id, label, type, options, placeholder, optionsSource } = control;
 
         switch (type) {
+          case 'text-input':
+            return (
+              <div key={id}>
+                <label htmlFor={id} className="block text-sm font-medium text-gray-300 mb-1">{label}</label>
+                <input
+                  type="text"
+                  id={id}
+                  value={getNestedValue(reportState, id) || ''}
+                  onChange={(e) => onStateChange(id, e.target.value)}
+                  className="mt-1 block w-full bg-gray-700 border-gray-600 text-white rounded-md p-2"
+                />
+              </div>
+            );
           case 'radio':
             return (
               <div key={id}>

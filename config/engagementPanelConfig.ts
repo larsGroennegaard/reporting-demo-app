@@ -2,6 +2,12 @@
 
 export const engagementPanelConfig = [
    {
+    id: 'name',
+    label: 'Report Name',
+    type: 'text-input',
+    section: 'settings',
+  },
+   {
     id: 'timePeriod',
     label: 'Time Period',
     type: 'select',

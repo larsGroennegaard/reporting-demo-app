@@ -5,29 +5,35 @@ import path from 'path';
 
 // --- Default Config Objects for Validation ---
 const defaultEngagementConfig = {
-    reportFocus: 'time_series',
-    timePeriod: 'this_year',
-    metrics: { base: [], influenced: {}, attributed: {} },
-    filters: { eventNames: [], signals: [], url: '', selectedChannels: [] },
-    funnelLength: 'unlimited',
-    chartMode: 'multi_metric',
-    singleChartMetric: 'sessions',
-    multiChartMetrics: [],
-    segmentationProperty: 'channel',
-    kpiCardConfig: [],
+    reportArchetype: 'engagement_analysis',
+    name: 'New Engagement Report',
+    description: '',
+    dataConfig: {
+        timePeriod: 'this_year',
+        reportFocus: 'time_series',
+        metrics: { base: [], influenced: {}, attributed: {} },
+        funnelLength: 'unlimited',
+        filters: { selectedChannels: [], eventNames: [], signals: [], url: '' },
+    },
+    kpiCards: [],
+    chart: { title: 'Chart', variant: 'time_series_line', metrics: [], metric: '', breakdown: 'channel' },
+    table: { title: 'Data Table', variant: 'time_series_by_metric' },
 };
 
 const defaultOutcomeConfig = {
-    reportFocus: 'time_series',
-    timePeriod: 'this_year',
-    selectedMetrics: {},
-    selectedCountries: [],
-    selectedEmployeeSizes: [],
-    chartMode: 'multiple_metrics',
-    singleChartMetric: '',
-    multiChartMetrics: [],
-    segmentationProperty: 'companyCountry',
-    kpiCardConfig: [],
+    reportArchetype: 'outcome_analysis',
+    name: 'New Outcome Report',
+    description: '',
+    dataConfig: {
+        timePeriod: 'this_year',
+        reportFocus: 'time_series',
+        metrics: {},
+        selectedCountries: [],
+        selectedEmployeeSizes: [],
+    },
+    kpiCards: [],
+    chart: { title: 'Chart', variant: 'time_series_line', metrics: [], metric: '', breakdown: 'companyCountry' },
+    table: { title: 'Data Table', variant: 'time_series_by_metric' },
 };
 
 
@@ -192,27 +198,40 @@ export async function POST(request: NextRequest) {
         if (!aiConfig || !aiConfig.reportArchetype) {
             throw new Error("AI response is valid JSON but is missing the required 'reportArchetype' key.");
         }
-
+        
+        // Deep merge the AI config with the correct default
         let finalConfig;
         if (aiConfig.reportArchetype === 'outcome_analysis') {
-            finalConfig = { ...defaultOutcomeConfig, ...aiConfig };
+            finalConfig = {
+                ...defaultOutcomeConfig,
+                ...aiConfig,
+                dataConfig: {
+                    ...defaultOutcomeConfig.dataConfig,
+                    ...(aiConfig.dataConfig || {})
+                },
+                chart: { ...defaultOutcomeConfig.chart, ...(aiConfig.chart || {}) },
+                table: { ...defaultOutcomeConfig.table, ...(aiConfig.table || {}) },
+            };
         } else {
-             finalConfig = {
+            finalConfig = {
                 ...defaultEngagementConfig,
                 ...aiConfig,
-                metrics: {
-                    ...defaultEngagementConfig.metrics,
-                    ...(aiConfig.metrics || {})
+                dataConfig: {
+                    ...defaultEngagementConfig.dataConfig,
+                    ...(aiConfig.dataConfig || {}),
+                    metrics: {
+                        ...defaultEngagementConfig.dataConfig.metrics,
+                        ...(aiConfig.dataConfig?.metrics || {})
+                    },
+                    filters: {
+                        ...defaultEngagementConfig.dataConfig.filters,
+                        ...(aiConfig.dataConfig?.filters || {})
+                    }
                 },
-                filters: {
-                    ...defaultEngagementConfig.filters,
-                    ...(aiConfig.filters || {})
-                }
+                chart: { ...defaultEngagementConfig.chart, ...(aiConfig.chart || {}) },
+                table: { ...defaultEngagementConfig.table, ...(aiConfig.table || {}) },
             };
         }
-        
-        if (!finalConfig.kpiCardConfig) finalConfig.kpiCardConfig = [];
-        finalConfig.kpiCardConfig.forEach((card: any, index: number) => { card.id = Date.now() + index; });
 
         console.log("Final, validated config object being sent to frontend:", JSON.stringify(finalConfig, null, 2));
         return NextResponse.json({ config: finalConfig });
