@@ -12,13 +12,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { BarChart2, CheckCircle2, Type } from 'lucide-react';
-
-interface SavedReport {
-  id: string;
-  name: string;
-  config: any;
-  createdAt: string;
-}
+import { SavedReport } from '@/lib/db'; // Import the unified type
 
 interface AddElementDialogProps {
   open: boolean;
@@ -53,16 +47,25 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
 
   useEffect(() => {
     if (selectedReport) {
-      const config = selectedReport.config;
       const elements: any[] = [];
       
-      config.kpiCardConfig.forEach((kpi: any) => elements.push({
-        type: 'kpi',
-        name: `KPI: ${kpi.metric.replace(/_/g, ' ')}`,
-        metric: kpi.metric,
-      }));
-      elements.push({ type: 'chart', name: 'Chart' });
-      elements.push({ type: 'table', name: 'Table' });
+      // Access kpiCards directly from the selectedReport object
+      if(selectedReport.kpiCards) {
+        selectedReport.kpiCards.forEach((kpi: any) => elements.push({
+          type: 'kpi',
+          name: `KPI: ${kpi.title || kpi.metric.replace(/_/g, ' ')}`,
+          metric: kpi.metric,
+        }));
+      }
+      
+      // Access chart directly
+      if(selectedReport.chart) {
+        elements.push({ type: 'chart', name: `Chart: ${selectedReport.chart.title || 'Chart'}` });
+      }
+      // Access table directly
+      if(selectedReport.table) {
+        elements.push({ type: 'table', name: `Table: ${selectedReport.table.title || 'Data Table'}` });
+      }
       
       setAvailableElements(elements);
       setStep(2);
@@ -71,7 +74,7 @@ export default function AddElementDialog({ open, onOpenChange, onElementSelect }
 
   const handleElementClick = (element: any) => {
     if (selectedReport) {
-      onElementSelect(element.type, selectedReport.config, element.metric);
+      onElementSelect(element.type, selectedReport, element.metric);
       onOpenChange(false);
     }
   };

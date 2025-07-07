@@ -4,11 +4,16 @@ import { Redis } from '@upstash/redis';
 const redis = Redis.fromEnv();
 
 const REPORTS_KEY = 'saved_reports';
-interface SavedReport {
+// The new, unified report structure
+export interface SavedReport {
   id: string;
   name: string;
   description?: string;
-  config: any;
+  reportArchetype: string;
+  dataConfig: any;
+  kpiCards: { title: string; metric: string }[];
+  chart: any;
+  table: any;
   createdAt: string;
 }
 

@@ -11,7 +11,7 @@ export async function POST(request: NextRequest) {
 
     // This is the server-to-server call to the protected endpoint.
     // It safely includes the API key, which is not exposed to the browser.
-    const response = await fetch(new URL('/api/report', request.url).toString(), {
+    const response = await fetch(new URL('/api/v2/report', request.url).toString(), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
