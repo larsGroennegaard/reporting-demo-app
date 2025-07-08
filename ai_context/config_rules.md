@@ -229,3 +229,83 @@ JSON
         "variant": "time_series_by_metric"
     }
 }
+
+QUESTION: How much newbiz and pipeline did we generate last quarter?
+
+GOOD JSON Output:
+
+JSON
+
+{
+   "id":"",
+   "name":"NewBiz and Pipeline Generated Last Quarter",
+   "description":"Analysis of NewBiz and SQL generated last quarter.",
+   "reportArchetype":"outcome_analysis",
+   "dataConfig":{
+      "timePeriod":"last_quarter",
+      "reportFocus":"time_series",
+      "metrics":{
+         "NewBiz":[
+            "deals",
+            "value"
+         ],
+         "SQL":[
+            "deals",
+            "value"
+         ]
+      },
+      "selectedCountries":[
+         
+      ],
+      "selectedEmployeeSizes":[
+         
+      ],
+      "funnelLength":"unlimited",
+      "filters":{
+         "selectedChannels":[
+            
+         ],
+         "eventNames":[
+            
+         ],
+         "signals":[
+            
+         ],
+         "url":""
+      }
+   },
+   "kpiCards":[
+      {
+         "title":"NewBiz deals",
+         "metric":"NewBiz_deals"
+      },
+      {
+         "title":"NewBiz value",
+         "metric":"NewBiz_value"
+      },
+      {
+         "title":"SQL deals",
+         "metric":"SQL_deals"
+      },
+      {
+         "title":"SQL value",
+         "metric":"SQL_value"
+      }
+   ],
+   "chart":{
+      "title":"PIpeline over time",
+      "variant":"time_series_line",
+      "metrics":[
+         "NewBiz_deals",
+         "NewBiz_value",
+         "SQL_deals",
+         "SQL_value"
+      ],
+      "breakdown":"",
+      "metric":"NewBiz_deals"
+   },
+   "table":{
+      "title":"PIpeline (Newbiz and ) over time",
+      "variant":"time_series_by_metric"
+   }
+}
