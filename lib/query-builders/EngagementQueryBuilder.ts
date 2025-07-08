@@ -292,14 +292,73 @@ export class EngagementQueryBuilder {
     }
 
     private _buildTimeSeriesSingleMetricQuery(): string {
-        // This method remains unchanged
         const { chart, dataConfig } = this.config;
         const metric = chart.metric;
-        const segmentCol = this._getSegmentColumn(chart.breakdown);
-        const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(chart.breakdown);
+        if (!metric) return '';
+        const breakdown = chart.breakdown;
+        const segmentCol = this._getSegmentColumn(breakdown);
+        const needsCompanyJoin = ['companyCountry', 'numberOfEmployees'].includes(breakdown);
+        let ctes = [];
 
+        if (metric.startsWith('influenced_')) {
+            const stage = metric.split('_')[1];
+            const type = metric.split('_')[2];
+            const funnelClause = getFunnelLengthClause(dataConfig.funnelLength, 'e.timestamp', 's.timestamp');
+            const metricAggregation = type === 'deals' ? 'COUNT(DISTINCT s.dd_stage_id)' : 'SUM(s.value)';
+            
+            let fromClause = `FROM ${this.eventsTable} e`;
+            if (needsCompanyJoin) fromClause += ` LEFT JOIN ${this.companiesTable} c ON e.dd_company_id = c.dd_company_id`;
+
+            ctes.push(`
+                FilteredSessions AS (
+                    SELECT DISTINCT e.dd_session_id, e.timestamp, ${segmentCol} as segment
+                    ${fromClause}
+                    ${this.whereClause}
+                )
+            `);
+            
+            ctes.push(`
+                TopSegments AS (
+                    SELECT segment
+                    FROM FilteredSessions fs JOIN ${this.eventsTable} e ON fs.dd_session_id = e.dd_session_id, UNNEST(e.stages) AS s
+                    WHERE s.name = '${sanitizeForSql(stage)}' AND segment IS NOT NULL
+                    GROUP BY 1
+                    ORDER BY ${metricAggregation} DESC
+                    LIMIT 5
+                )
+            `);
+            
+            ctes.push(`
+                MonthlySegmentInfluencedDeals AS (
+                    SELECT DISTINCT
+                        DATE_TRUNC(fs.timestamp, MONTH) AS month,
+                        fs.segment,
+                        s.dd_stage_id,
+                        s.value
+                    FROM FilteredSessions AS fs
+                    JOIN ${this.eventsTable} AS e ON fs.dd_session_id = e.dd_session_id, UNNEST(e.stages) AS s
+                    WHERE fs.segment IN (SELECT segment FROM TopSegments)
+                    AND s.name = '${sanitizeForSql(stage)}'
+                    ${funnelClause}
+                )
+            `);
+            
+            return `
+                WITH ${ctes.join(', ')}
+                SELECT
+                  FORMAT_TIMESTAMP('%Y-%m-01', month) as month,
+                  segment,
+                  ${type === 'deals' ? 'COUNT(DISTINCT dd_stage_id)' : 'SUM(value)'} AS value
+                FROM
+                  MonthlySegmentInfluencedDeals
+                GROUP BY 1, 2
+                ORDER BY month, segment
+            `;
+        }
+
+        // --- Logic for Base and Attributed Metrics (Unchanged) ---
         let fromClause = ``;
-        let whereExtension = ``;
+        let whereExtension = this.whereClause;
         let metricAggregation = ``;
         let timestampColumn = 'e.timestamp';
         let tableAlias = 'e';
@@ -308,36 +367,21 @@ export class EngagementQueryBuilder {
             const stage = metric.replace('attributed_', '').replace(/_deals/g, '');
             tableAlias = 'r';
             fromClause = `FROM ${this.attributionTable} r LEFT JOIN UNNEST(r.attribution) a ON a.model = 'Data-Driven'`;
-            if(needsCompanyJoin) {
-                fromClause += ` LEFT JOIN ${this.companiesTable} c ON r.dd_company_id = c.dd_company_id`;
-            }
+            if(needsCompanyJoin) fromClause += ` LEFT JOIN ${this.companiesTable} c ON r.dd_company_id = c.dd_company_id`;
             whereExtension = `WHERE r.stage.name = '${sanitizeForSql(stage)}' AND r.dd_session_id IN (SELECT dd_session_id FROM ${this.eventsTable} e ${this.whereClause}) ${getFunnelLengthClause(dataConfig.funnelLength, 'r.timestamp', 'r.stage.timestamp')}`;
             metricAggregation = `SUM(a.weight)`;
             timestampColumn = 'r.timestamp';
         } else { 
             fromClause = `FROM ${this.eventsTable} e`;
             if(needsCompanyJoin) fromClause += ` LEFT JOIN ${this.companiesTable} c ON e.dd_company_id = c.dd_company_id`;
-            whereExtension = this.whereClause;
-
-            if (metric.startsWith('influenced_')) {
-                const stage = metric.split('_')[1];
-                fromClause += `, UNNEST(e.stages) AS s`;
-                whereExtension += ` AND s.name = '${sanitizeForSql(stage)}' ${getFunnelLengthClause(dataConfig.funnelLength, 'e.timestamp', 's.timestamp')}`;
-                metricAggregation = `COUNT(DISTINCT s.dd_stage_id)`;
-            } else if (metric === 'sessions') {
-                metricAggregation = 'COUNT(DISTINCT e.dd_session_id)';
-            } else if (metric === 'companies') {
-                metricAggregation = 'COUNT(DISTINCT e.dd_company_id)';
-            } else if (metric === 'contacts') {
-                metricAggregation = 'COUNT(DISTINCT e.dd_contact_id)';
-            } else if (metric === 'events') {
-                metricAggregation = 'COUNT(DISTINCT e.dd_event_id)';
-            }
+            if (metric === 'sessions') metricAggregation = 'COUNT(DISTINCT e.dd_session_id)';
+            else if (metric === 'companies') metricAggregation = 'COUNT(DISTINCT e.dd_company_id)';
+            else if (metric === 'contacts') metricAggregation = 'COUNT(DISTINCT e.dd_contact_id)';
+            else if (metric === 'events') metricAggregation = 'COUNT(DISTINCT e.dd_event_id)';
         }
         if (!metricAggregation) return '';
 
         const finalSegmentCol = this._getSegmentColumn(chart.breakdown, tableAlias);
-
         return `
             WITH TopSegments AS (
                 SELECT ${finalSegmentCol} as segment
