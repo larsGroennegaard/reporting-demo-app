@@ -109,9 +109,9 @@ function DashboardElement({ item, onRemove, onContentUpdate, isEditing, onEditTo
             case 'kpi':
                 return <KpiCard title={item.kpiMetric?.replace(/_/g, ' ')} value={data.kpiData ? data.kpiData[item.kpiMetric!] : '-'} />;
             case 'chart':
-                return <Chart data={data.chartData || []} mode={item.reportConfig.reportFocus === 'segmentation' ? 'bar' : item.reportConfig.chartMode} config={item.reportConfig} />;
+                return <Chart data={data.chartData || []} mode={item.reportConfig.dataConfig.reportFocus === 'segmentation' ? 'bar' : item.reportConfig.chart.variant} config={item.reportConfig} />;
             case 'table':
-                return <Table data={data.chartData || []} mode={item.reportConfig.reportFocus} config={item.reportConfig} />;
+                return <Table data={data.chartData || []} mode={item.reportConfig.dataConfig.reportFocus} config={item.reportConfig} />;
             default:
                 return null;
         }
@@ -226,8 +226,8 @@ export default function DashboardPage() {
                     i: newItemId,
                     x: (dashboard.items.length * 4) % 12,
                     y: Infinity,
-                    w: elementType === 'kpi' ? 4 : 8,
-                    h: elementType === 'kpi' ? 2 : 8,
+                    w: elementType === 'kpi' ? 2 : 6,
+                    h: elementType === 'kpi' ? 3 : 10,
                 }
             };
         }

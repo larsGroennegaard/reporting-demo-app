@@ -192,7 +192,7 @@ export default function ReportPage() {
 
     const handleQuerySubmit = async (query: string) => {
         setIsGenerating(true);
-        setMessages(prev => [...prev, { sender: 'user', text: query }, { sender: 'loading', text: 'Thinking...' }]);
+        setMessages(prev => [...prev, { sender: 'user', text: query }, { sender: 'loading', text: 'Digging through teta bytes of data...' }]);
         
         try {
             const response = await fetch('/api/chat', {
@@ -209,7 +209,7 @@ export default function ReportPage() {
             const data = await response.json();
             setReportState(data.config);
             setCurrentQuery(query);
-            setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Fetching data...' } : m));
+            setMessages(prev => prev.map(m => m.sender === 'loading' ? { sender: 'loading', text: 'Building your GTM insights...' } : m));
 
         } catch (error) {
             console.error("Error during query submission:", error);
