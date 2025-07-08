@@ -117,20 +117,20 @@ export class EngagementQueryBuilder {
     
     private buildWhereClause(): string {
         const { dataConfig } = this.config;
-        let filterClauses = '';
+        let whereClause = `WHERE 1=1 ${getTimePeriodClause(this.config.dataConfig.timePeriod, 'e.timestamp')}`;
         if (dataConfig.filters?.selectedChannels?.length > 0) {
-            filterClauses += ` AND e.session.channel IN (${dataConfig.filters.selectedChannels.map((c: string) => `'${sanitizeForSql(c)}'`).join(',')})`;
+            whereClause += ` AND e.session.channel IN (${dataConfig.filters.selectedChannels.map((c: string) => `'${sanitizeForSql(c)}'`).join(',')})`;
         }
         if (dataConfig.filters?.eventNames?.length > 0) {
-            filterClauses += ` AND e.event_name IN (${dataConfig.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
+            whereClause += ` AND e.event_name IN (${dataConfig.filters.eventNames.map((e: string) => `'${sanitizeForSql(e)}'`).join(',')})`;
         }
         if (dataConfig.filters?.signals?.length > 0) {
-            filterClauses += ` AND EXISTS (SELECT 1 FROM UNNEST(e.signals) s WHERE s.name IN (${dataConfig.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
+            whereClause += ` AND EXISTS (SELECT 1 FROM UNNEST(e.signals) s WHERE s.name IN (${dataConfig.filters.signals.map((s: string) => `'${sanitizeForSql(s)}'`).join(',')}))`;
         }
         if (dataConfig.filters?.url) {
-            filterClauses += ` AND e.event.url_clean LIKE '%${sanitizeForSql(dataConfig.filters.url)}%'`;
+            whereClause += ` AND e.event.url_clean LIKE '%${sanitizeForSql(dataConfig.filters.url)}%'`;
         }
-        return `WHERE 1=1 ${getTimePeriodClause(this.config.dataConfig.timePeriod)}`;
+        return whereClause;
     }
 
     buildKpiQuery(): string {
@@ -165,9 +165,7 @@ export class EngagementQueryBuilder {
             const influencedStages = Array.from(new Set(kpiCards.filter((k:any) => k.metric.startsWith('influenced_')).map((k:any) => k.metric.split('_')[1]))) as string[];
             
             if (influencedStages.length > 0) {
-                const uniqueDealsClauses = influencedStages.map((stage: string) =>
-                    `SELECT DISTINCT s.dd_stage_id, s.value, s.name FROM ${this.eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND s.name = '${sanitizeForSql(stage)}'${funnelClause}`
-                ).join(' UNION ALL ');
+                const uniqueDealsClauses = `SELECT DISTINCT s.dd_stage_id, s.value, s.name FROM ${this.eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND s.name IN (${influencedStages.map(stage => `'${sanitizeForSql(stage)}'`).join(',')}) ${funnelClause}`;
 
                 ctes.push(`UniqueInfluencedDeals AS (${uniqueDealsClauses})`);
                 const influencedSelects = kpiCards.filter((k:any) => k.metric.startsWith('influenced_')).map((k:any) => {
@@ -222,7 +220,6 @@ export class EngagementQueryBuilder {
     };
     
     private _buildTimeSeriesMultiMetricQuery(): string {
-        // This method remains unchanged.
         const { chart, dataConfig } = this.config;
         const ctes = [];
         const finalSelects = [ `m.month` ];
@@ -230,15 +227,13 @@ export class EngagementQueryBuilder {
         const { startDate, endDate } = getDateRangeForQuery(dataConfig.timePeriod);
         let mainFrom = `FROM (SELECT FORMAT_TIMESTAMP('%Y-%m-01', day) as month FROM UNNEST(GENERATE_DATE_ARRAY(DATE_TRUNC(DATE('${startDate}'), MONTH), DATE_TRUNC(DATE('${endDate}'), MONTH), INTERVAL 1 MONTH)) as day) m`;
         
-        ctes.push(`FilteredSessions AS (SELECT DISTINCT dd_session_id FROM ${this.eventsTable} e ${this.whereClause})`);
-
         const baseMetrics = chart.metrics.filter((m: string) => ['sessions', 'events', 'contacts', 'companies'].includes(m));
         if (baseMetrics.length > 0) {
             const baseSelects = baseMetrics.map((m: string) => {
                 if (m === 'companies') return `COUNT(DISTINCT e.dd_company_id) as companies`;
                 return `COUNT(DISTINCT e.dd_${m.slice(0, -1)}_id) as ${m}`;
             }).join(', ');
-            ctes.push(`BaseMonthly AS (SELECT FORMAT_TIMESTAMP('%Y-%m-01', DATE_TRUNC(e.timestamp, MONTH)) as month, ${baseSelects} FROM ${this.eventsTable} e WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) GROUP BY 1)`);
+            ctes.push(`BaseMonthly AS (SELECT FORMAT_TIMESTAMP('%Y-%m-01', DATE_TRUNC(e.timestamp, MONTH)) as month, ${baseSelects} FROM ${this.eventsTable} e ${this.whereClause} GROUP BY 1)`);
             finalSelects.push(...baseMetrics.map((m: string) => `b.${m}`));
             mainFrom += ` LEFT JOIN BaseMonthly b ON m.month = b.month`;
         }
@@ -247,13 +242,32 @@ export class EngagementQueryBuilder {
         if (influencedMetrics.length > 0) {
              const influencedStages = Array.from(new Set(influencedMetrics.map((m: string) => m.split('_')[1])));
              const funnelClause = getFunnelLengthClause(dataConfig.funnelLength, 'e.timestamp', 's.timestamp');
+             
+             ctes.push(`MonthlyInfluencedDeals AS (
+                SELECT DISTINCT
+                    DATE_TRUNC(e.timestamp, MONTH) AS month,
+                    s.dd_stage_id,
+                    s.name,
+                    s.value
+                FROM ${this.eventsTable} AS e, UNNEST(e.stages) AS s
+                ${this.whereClause}
+                AND s.name IN (${influencedStages.map(s=>`'${s}'`).join(',')})
+                ${funnelClause}
+             )`);
+
              const infSelects = influencedMetrics.map((m: string) => {
                  const [_, stage, type] = m.split('_');
-                 if(type === 'deals') return `COUNT(DISTINCT CASE WHEN s.name = '${sanitizeForSql(stage)}' THEN s.dd_stage_id END) AS ${m}`;
-                 if(type === 'value') return `SUM(CASE WHEN s.name = '${sanitizeForSql(stage)}' THEN s.value END) AS ${m}`;
+                 if(type === 'deals') return `COUNT(DISTINCT CASE WHEN name = '${sanitizeForSql(stage)}' THEN dd_stage_id END) AS ${m}`;
+                 if(type === 'value') return `SUM(CASE WHEN name = '${sanitizeForSql(stage)}' THEN value END) AS ${m}`;
                  return ''
              }).join(', ');
-             ctes.push(`InfluencedMonthly AS (SELECT FORMAT_TIMESTAMP('%Y-%m-01', DATE_TRUNC(e.timestamp, MONTH)) as month, ${infSelects} FROM ${this.eventsTable} e, UNNEST(e.stages) s WHERE e.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND s.name IN (${influencedStages.map(s=>`'${s}'`).join(',')}) ${funnelClause} GROUP BY 1)`);
+
+             ctes.push(`InfluencedMonthly AS (
+                SELECT FORMAT_TIMESTAMP('%Y-%m-01', month) as month, ${infSelects} 
+                FROM MonthlyInfluencedDeals 
+                GROUP BY 1
+             )`);
+
              finalSelects.push(...influencedMetrics.map((m: string) => `i.${m}`));
              mainFrom += ` LEFT JOIN InfluencedMonthly i ON m.month = i.month`;
         }
@@ -267,14 +281,14 @@ export class EngagementQueryBuilder {
                  if(type === 'deals') return `SUM(CASE WHEN r.stage.name = '${sanitizeForSql(stage)}' THEN a.weight ELSE 0 END) AS ${m}`;
                  return ''
             }).join(', ');
-            const attrWhere = `WHERE r.stage.name IN (${attributedStages.map(s=>`'${s}'`).join(',')}) AND r.dd_session_id IN (SELECT dd_session_id FROM FilteredSessions) AND a.model = 'Data-Driven' ${funnelClause}`;
+            const attrWhere = `WHERE r.stage.name IN (${attributedStages.map(s=>`'${s}'`).join(',')}) AND r.dd_session_id IN (SELECT dd_session_id FROM ${this.eventsTable} e ${this.whereClause}) AND a.model = 'Data-Driven' ${funnelClause}`;
             ctes.push(`AttributedMonthly AS (SELECT FORMAT_TIMESTAMP('%Y-%m-01', DATE_TRUNC(r.timestamp, MONTH)) as month, ${attrSelects} FROM ${this.attributionTable} r, UNNEST(attribution) a ${attrWhere} GROUP BY 1)`);
             finalSelects.push(...attributedMetrics.map((m: string) => `att.${m}`));
             mainFrom += ` LEFT JOIN AttributedMonthly att ON m.month = att.month`;
         }
         
-        if (ctes.length === 1) return '';
-        return `WITH ${ctes.join(', ')} SELECT ${finalSelects.join(', ')} ${mainFrom} ORDER BY m.month`;
+        if (ctes.length === 0) return ''; // No metrics to query
+        return `WITH ${ctes.join(', ')} SELECT ${finalSelects.map(s => s === 'm.month' ? s : `COALESCE(${s}, 0) as ${s.split('.').pop()}`).join(', ')} ${mainFrom} ORDER BY m.month`;
     }
 
     private _buildTimeSeriesSingleMetricQuery(): string {
