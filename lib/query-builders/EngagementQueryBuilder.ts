@@ -324,7 +324,7 @@ export class EngagementQueryBuilder {
                     WHERE s.name = '${sanitizeForSql(stage)}' AND segment IS NOT NULL
                     GROUP BY 1
                     ORDER BY ${metricAggregation} DESC
-                    LIMIT 5
+                    LIMIT 10
                 )
             `);
             
@@ -387,7 +387,7 @@ export class EngagementQueryBuilder {
                 SELECT ${finalSegmentCol} as segment
                 ${fromClause}
                 ${whereExtension} AND ${finalSegmentCol} IS NOT NULL
-                GROUP BY segment ORDER BY ${metricAggregation} DESC LIMIT 5
+                GROUP BY segment ORDER BY ${metricAggregation} DESC LIMIT 10
             ),
             MonthlyData AS (
                 SELECT FORMAT_TIMESTAMP('%Y-%m-01', DATE_TRUNC(${timestampColumn}, MONTH)) as month, ${finalSegmentCol} AS segment, ${metricAggregation} AS value
