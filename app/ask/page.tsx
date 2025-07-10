@@ -2,12 +2,22 @@
 "use client";
 import { useState } from 'react';
 import { Bot, User, Loader2, Send, Database, FileCode } from 'lucide-react';
-import AdHocTable from '../components/AdHocTable'; // Using the new component
+import AdHocTable from '../components/AdHocTable';
 
 type AdHocMessage = {
   sender: 'user' | 'bot';
   text: string;
 };
+
+// A simple component to render basic markdown
+const SimpleMarkdown = ({ text }: { text: string }) => {
+  const html = text
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
+    .replace(/\n/g, '<br />'); // Newlines
+
+  return <p className="text-sm break-words" dangerouslySetInnerHTML={{ __html: html }} />;
+};
+
 
 export default function AskPage() {
   const [messages, setMessages] = useState<AdHocMessage[]>([]);
@@ -71,7 +81,7 @@ export default function AskPage() {
           <div key={index} className={`flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : ''}`}>
             {msg.sender === 'bot' && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-700 flex items-center justify-center"><Bot size={20} /></div>}
             <div className={`p-3 rounded-lg max-w-2xl ${msg.sender === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-700'}`}>
-              <p className="text-sm break-words">{msg.text}</p>
+              {msg.sender === 'bot' ? <SimpleMarkdown text={msg.text} /> : <p className="text-sm break-words">{msg.text}</p>}
             </div>
             {msg.sender === 'user' && <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center"><User size={20} /></div>}
           </div>

@@ -18,8 +18,8 @@ async function readAIContextFile(filename: string): Promise<string> {
 }
 
 // Helper to call Gemini API
-async function callGemini(apiKey: string, prompt: string) {
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`, {
+async function callGemini(apiKey: string, prompt: string, modelName: string) {
+    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -66,11 +66,7 @@ export async function POST(request: NextRequest) {
         readAIContextFile('spend_definition.json')
     ]);
     
-    const basePrompt = `
-      Based on the user's question and the provided context, generate a single, valid BigQuery SQL query.
-
-      **CRITICAL INSTRUCTION:** Your response must be ONLY the raw SQL query text. Do not include any explanation, markdown formatting like \`\`\`sql, or any other characters. The output must be a string that can be executed directly against BigQuery without any modification.
-
+    const baseContext = `
       **Business Rules:**
       ${rules}
 
@@ -84,6 +80,14 @@ export async function POST(request: NextRequest) {
       Attribution: ${attributionSchema}
       Contacts: ${contactsSchema}
       Spend: ${spendSchema}
+    `;
+    
+    const initialPrompt = `
+      Based on the user's question and the provided context, generate a single, valid BigQuery SQL query.
+
+      **CRITICAL INSTRUCTION:** Your response must be ONLY the raw SQL query text. Do not include any explanation, markdown formatting like \`\`\`sql, or any other characters. The output must be a string that can be executed directly against BigQuery without any modification.
+
+      ${baseContext}
       
       **User's Question:** "${query}"
     `;
@@ -95,11 +99,11 @@ export async function POST(request: NextRequest) {
     while (retries <= MAX_RETRIES) {
         try {
             const prompt = retries === 0
-                ? basePrompt
-                : `I gave this prompt:\n${basePrompt}\n\nAnd received this SQL:\n${sql}\n\nWhen I attempted to run it, I got this error:\n${lastError.message}\n\nPlease carefully review the SQL and produce a working SQL query. Respond with ONLY the corrected raw SQL query.`;
+                ? initialPrompt
+                : `I gave this prompt:\n${initialPrompt}\n\nAnd received this SQL:\n${sql}\n\nWhen I attempted to run it, I got this error:\n${lastError.message}\n\nPlease carefully review the SQL and produce a working SQL query. Respond with ONLY the corrected raw SQL query.`;
 
             console.log(`[ASK API] Attempt ${retries + 1}: Calling Gemini to generate SQL...`);
-            sql = await callGemini(geminiApiKey, prompt);
+            sql = await callGemini(geminiApiKey, prompt, 'gemini-2.5-pro');
             console.log(`[ASK API] Attempt ${retries + 1}: Received SQL:`, sql);
             
             if (!sql || !sql.toUpperCase().includes('SELECT')) {
@@ -114,16 +118,27 @@ export async function POST(request: NextRequest) {
             console.log(`[ASK API] BigQuery execution successful. Found ${rows.length} rows.`);
 
             const explanationPrompt = `
-              Based on the user's question and the following result set from a SQL query, provide a concise, human-readable answer.
-              Keep it to 1-3 sentences. Do not mention the query or the table.
+              A marketing data analyst asked this question: "${query}"
 
-              **User's Question:** "${query}"
-              **Query Result (first 5 rows):**
-              \`\`\`json
-              ${JSON.stringify(rows.slice(0, 5), null, 2)}
+              From that, I generated this query: 
+              \`\`\`sql
+              ${sql}
               \`\`\`
+
+              I had this context about the database and business rules:
+              ${baseContext}
+
+              When I ran the query, I got this result set:
+              \`\`\`json
+              ${JSON.stringify(rows, null, 2)}
+              \`\`\`
+
+              Now, construct an answer for the user.
+              1.  First, briefly explain how the question was interpreted based on the SQL and the context. Keep this succinct and short. Use markdown for emphasis (e.g., **bold**).
+              2.  Add a double newline character ('\\n\\n') for a visual separation.
+              3.  Then, give the result in a human-readable prose way. Keep this to a maximum of 3 sentences. Use markdown for emphasis.
             `;
-            const explanation = await callGemini(geminiApiKey, explanationPrompt);
+            const explanation = await callGemini(geminiApiKey, explanationPrompt, 'gemini-2.5-pro');
             console.log("[ASK API] Received explanation:", explanation);
 
             return NextResponse.json({ sql, explanation, data: rows });
