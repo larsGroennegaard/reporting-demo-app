@@ -81,7 +81,7 @@ export default function AskPage() {
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileCode size={20} /> Generated SQL Query
+              <FileCode size={20} /> SQL Query
             </DialogTitle>
           </DialogHeader>
           <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
@@ -126,7 +126,7 @@ export default function AskPage() {
           <div className="space-y-4">
             <Button variant="outline" onClick={() => setIsSqlDialogOpen(true)} className="w-full justify-center gap-2">
                 <FileCode size={16} />
-                Show Generated SQL
+                Show SQL
             </Button>
             <AdHocTable data={queryResult.data} title="Query Results" />
           </div>
