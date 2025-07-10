@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
             console.log(`[ASK API] BigQuery execution successful. Found ${rows.length} rows.`);
 
             const explanationPrompt = `
-              A marketing data analyst asked this question: "${query}"
+              A marketing analyst asked this question: "${query}"
 
               From that, I generated this query: 
               \`\`\`sql
@@ -133,10 +133,12 @@ export async function POST(request: NextRequest) {
               ${JSON.stringify(rows, null, 2)}
               \`\`\`
 
-              Now, construct an answer for the user.
-              1.  First, briefly explain how the question was interpreted based on the SQL and the context. Keep this succinct and short. Use markdown for emphasis (e.g., **bold**).
-              2.  Add a double newline character ('\\n\\n') for a visual separation.
-              3.  Then, give the result in a human-readable prose way. Keep this to a maximum of 3 sentences. Use markdown for emphasis.
+              Now, construct an answer for the user. Consider that the user is not a data analyst, so the answer should be clear and concise.
+              1. First, briefly explain how the question was interpreted based on the SQL and the context. Keep this succinct and short.
+              2. Now Add a double newline character ('\\n\\n') for a visual separation.
+              3. Then, give the result in a human-readable prose way, keeping it to a maximum of 3 sentences.
+              **CRITICAL**: Do NOT use any markdown formatting like ** for bolding. Use only plain text.
+              important: the first and the second part of the answer must be separated by a double newline character.
             `;
             const explanation = await callGemini(geminiApiKey, explanationPrompt, 'gemini-2.5-pro');
             console.log("[ASK API] Received explanation:", explanation);

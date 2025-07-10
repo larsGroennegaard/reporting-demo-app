@@ -3,13 +3,23 @@
 import { useState } from 'react';
 import { Bot, User, Loader2, Send, Database, FileCode } from 'lucide-react';
 import AdHocTable from '../components/AdHocTable';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 type AdHocMessage = {
   sender: 'user' | 'bot';
   text: string;
 };
 
-// A simple component to render basic markdown
+/**
+ * A simple component to render basic markdown from the AI's response.
+ * It handles bolding (**) and newlines.
+ */
 const SimpleMarkdown = ({ text }: { text: string }) => {
   const html = text
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // Bold
@@ -25,6 +35,7 @@ export default function AskPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState('');
   const [queryResult, setQueryResult] = useState<{ sql: string; explanation: string; data: any[] } | null>(null);
+  const [isSqlDialogOpen, setIsSqlDialogOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +77,19 @@ export default function AskPage() {
 
   return (
     <div className="flex flex-col h-full">
+      <Dialog open={isSqlDialogOpen} onOpenChange={setIsSqlDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileCode size={20} /> Generated SQL Query
+            </DialogTitle>
+          </DialogHeader>
+          <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
+            <code>{queryResult?.sql}</code>
+          </pre>
+        </DialogContent>
+      </Dialog>
+
       <div className="flex-1 overflow-y-auto p-8 space-y-8">
         {messages.length === 0 && (
           <div className="text-center pt-16">
@@ -100,14 +124,10 @@ export default function AskPage() {
 
         {queryResult?.data && (
           <div className="space-y-4">
-             <div className="bg-gray-800 p-4 shadow rounded-lg">
-                <h3 className="text-lg font-semibold text-gray-100 mb-2 flex items-center gap-2">
-                  <FileCode size={20} /> Generated SQL Query
-                </h3>
-                <pre className="text-sm text-yellow-300 bg-gray-900 p-4 rounded-md overflow-x-auto">
-                  <code>{queryResult.sql}</code>
-                </pre>
-            </div>
+            <Button variant="outline" onClick={() => setIsSqlDialogOpen(true)} className="w-full justify-center gap-2">
+                <FileCode size={16} />
+                Show Generated SQL
+            </Button>
             <AdHocTable data={queryResult.data} title="Query Results" />
           </div>
         )}
