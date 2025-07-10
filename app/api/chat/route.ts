@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
     return new NextResponse(JSON.stringify({ error: 'Query is required.' }), { status: 400 });
   }
   
-  const modelName = 'gemini-1.5-flash-latest';
+  const modelName = 'gemini-2.5-flash';
 
   // --- Step 2: Generate Natural Language Answer ---
   if (kpiData) {

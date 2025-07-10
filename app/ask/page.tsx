@@ -49,7 +49,7 @@ export default function AskPage() {
     setInputValue('');
 
     try {
-      setLoadingStep('Generating SQL...');
+      setLoadingStep('Thinking hard...crunching data...');
       const response = await fetch('/api/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
