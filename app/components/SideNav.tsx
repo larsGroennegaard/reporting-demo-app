@@ -3,12 +3,13 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, BarChart2, LayoutDashboard, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Home, BarChart2, LayoutDashboard, ChevronsLeft, ChevronsRight, MessageCircleQuestion } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 const navLinks = [
   { href: "/", label: "Home", icon: Home },
+  { href: "/ask", label: "Ask", icon: MessageCircleQuestion },
   { href: "/reports", label: "Reports", icon: BarChart2 },
   { href: "/dashboards", label: "Dashboards", icon: LayoutDashboard },
 ];
@@ -35,7 +36,7 @@ export default function SideNav({ isCollapsed, toggleSidebar }: SideNavProps) {
 
       <ul className="space-y-2 flex-grow pt-4">
         {navLinks.map((link) => {
-          const isActive = pathname === link.href;
+          const isActive = pathname.startsWith(link.href) && (link.href !== '/' || pathname === '/');
           return (
             <li key={link.href}>
               <Link

@@ -53,7 +53,8 @@ export default function Chart({ data, mode, config, title }: { data: any[], mode
         const pivotedData: { [key: string]: any } = {};
         const segments = new Set<string>();
         data.forEach(item => {
-            const month = new Date(item.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+            const monthValue = item.month?.value ? item.month.value : item.month;
+            const month = new Date(monthValue).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
             if (!pivotedData[month]) { pivotedData[month] = { month }; }
             const segmentName = item.segment || 'Unknown';
             pivotedData[month][segmentName] = item.value;
@@ -62,7 +63,10 @@ export default function Chart({ data, mode, config, title }: { data: any[], mode
         return { chartData: Object.values(pivotedData), keys: Array.from(segments) };
     } else { // time_series_line
         const keys = config.chart?.metrics || [];
-        const chartData = data.map(row => ({ ...row, month: new Date(row.month).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) }));
+        const chartData = data.map(row => {
+            const monthValue = row.month?.value ? row.month.value : row.month;
+            return { ...row, month: new Date(monthValue).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) };
+        });
         return { chartData, keys };
     }
   };

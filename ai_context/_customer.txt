@@ -1,0 +1,464 @@
+
+Purpose: provide details on things that are specific to the customer prompting.
+
+You must refer to any of these exactly as spelled here including casing
+
+
+____________________________________________________
+
+customer table location
+my-project-29736test.dreamdata_demo.
+
+
+____________________________________________________
+
+
+Customer currency: EURO
+____________________________________________________
+
+KEY customer_stages
+NewBiz = an account reached the closed won stage of new business
+SQL = a sales qualified lead, this happens when an account entered the sales pipeline, a deal was created for an account in the sales pipeline, an opportunity was created for an account in the sales pipeline
+MQL = a marketing qualified lead, an account entered the qualification pipeline. This happens when a qualified account either submits a demo form or signs up for free or we see a high intent signal for the account
+
+____________________________________________________
+
+CONTENT CATEGORIES
+App data-platform
+App Benchmarks
+App Other features
+App Content Analytics
+Help Docs
+App Segmentation
+Blog - other
+App Attribution Models
+data-platform
+App Content Perf
+pricing & signup
+other website
+recipe
+App Acquisition
+library
+App Audience hub
+uncategorized
+Blog - success stories
+App web-traffic
+App Journey
+App Reveal
+App Revenue Analytics
+solutions
+App Paid Perf
+Developer Docs
+App Conversion
+App Revenue Attribution
+product
+
+____________________________________________________
+
+
+SIGNALS
+[{
+  "signal_name": "Conversion - Any Conversion",
+  "description": "Conversion events (conversions as setup within Dreamdata platform)"
+}, {
+  "signal_name": "G2 - Page View",
+  "description": "Page Views on G2 Review Sites"
+}, {
+  "signal_name": "Linkedin Ad Engagement",
+  "description": "Ad engagements on LinkedIn ie. ad clicks, clicks to view landing or company page"
+}, {
+  "signal_name": "Product - Journeys LinkedIn Engagements or Reveal",
+  "description": "Indicates an account is exploring the LinkedIn Engagements or Reveal features within the Journeys section of the product."
+}, {
+  "signal_name": "App - Cost Page",
+  "description": "Indicates an account\u0027s interest in understanding the cost associated with the product by visiting the cost page within the application."
+}, {
+  "signal_name": "Product page views",
+  "description": null
+}, {
+  "signal_name": "App - Contacts or Events Page",
+  "description": "Identifies accounts where users have visited either the contacts or events page within the application. This may indicate interest in managing contacts or understanding event data."
+}, {
+  "signal_name": "App - Journeys Page",
+  "description": "Identifies accounts that have visited the Journeys page within the Dreamdata app, specifically the \u0027reveal\u0027 and \u0027linkedin-engagements\u0027 sections. This indicates interest in understanding customer journey and LinkedIn engagement data."
+}, {
+  "signal_name": "LinkedIn Ads - Thought Leader Video Engagement",
+  "description": "Indicates accounts engaging with thought leadership video content on LinkedIn through paid ad campaigns."
+}, {
+  "signal_name": "Website - Product Pages",
+  "description": "Indicates interest in the company\u0027s product offerings based on website activity."
+}, {
+  "signal_name": "Website - Revenue Analytics Page",
+  "description": "Indicates an account has visited the Revenue Analytics page on the website."
+}, {
+  "signal_name": "Website - Pricing Page",
+  "description": "Indicates an account has visited the pricing page on the website, suggesting potential interest in product costs and plans."
+}, {
+  "signal_name": "Product - Enable Integration",
+  "description": "Indicates an account has enabled an integration within the product."
+}]
+
+
+____________________________________________________
+
+
+ATTRIBUTION MODELS
+Last Touch
+Data-Driven
+First Touch
+Linear
+
+
+____________________________________________________
+
+COMPANIES CUSTOM PROPERTIES
+
+name, plan, type, address, churn_date, hs_is_enriched, hs_lead_status, ad_spend_change, lead_score_rank, hs_object_source, web_technologies, customer_fit_rank, access_trust_center, apollo_technologies, hs_is_target_account, apollo_latest_funding_round_date, customer_status
+
+
+____________________________________________________
+
+DEALS CUSTOM PROPERTIES
+
+dealstage, dealtype, plan
+
+
+____________________________________________________
+
+CHANNELS
+channel
+Emails
+Login
+Organic LLM
+Redirect
+referrer
+Review Sites
+Agency Partners
+Webinar
+Paid Other
+Display
+Organic Video
+Events
+Chrome Extension
+Content
+Community
+Sales
+Product
+direct
+Paid Social
+Podcast
+Organic Social
+Organic Search
+Instant Message
+Display Ads
+Customer Success
+Paid Search
+Paid Video
+Tech Partners
+Trust
+
+____________________________________________________
+
+
+SOURCES (with more than 10 occurences in sessions)
+LinkedIn
+App
+direct
+Google
+Newsletter
+Dreamdata.Com
+User Invited
+Referrer
+Capterra
+Shared Report
+Outbound Email
+Bing
+Docs
+App.Dreamdata.Com
+Meeting
+Facebook
+System Emails
+Intercom
+Quora
+Product Emails
+Dashboard
+Transactional
+Storylane
+Producthunt
+Segment
+Hubspot
+v1
+Slack
+GetApp
+Growth Automation
+Intercom Chat
+Youtube
+Download
+Microsoft Teams
+Growthhackers.Com
+G2
+Email
+DuckDuckGo
+zest.is
+lightning.force.com
+Yahoo
+Gmail
+Onboarding Emails
+Twitter
+LinkedIn Message
+ChatGPT
+Dreamdata
+obsidian_dk
+Software Advice
+Phone Call
+Pipedrive
+Brave
+Tracking.Docs.Dreamdata.Io
+Reddit
+Chrome Extension
+Yandex
+Auth.Dreamdata.Io
+Www.Dreamdata.Com
+Vanta
+Close
+Zest.Isandutm_Medium
+Dreamdata.Cloud
+Ecosia
+CMO_Alliance
+Signature
+pl_partners_dk
+Growthletter
+Perplexity
+somejuan_dk
+Developer Docs
+Afjfyfggfe
+Safebase
+Instagram
+Outbound
+brendan-hufford
+LinkedIn Connection Request
+Saastr-US
+Hs_Automation
+MSN
+Site
+Tldrfounders
+Substack
+Agency Partners
+Salesforce
+Twentythree
+Saastr-EU
+Saas Roundup By Chartmogul
+UTM_io
+Baidu
+Mail
+Saasworthy
+Mops
+Webinar-Obsidian
+Gebafbdgvbaby
+Interactive Demo
+Pwa
+dbdocs.io
+Ebook
+Hightouch
+Blog
+fillmyfunnel_co_uk
+Feedblitz
+Google Cloud
+Eliteadvertising
+Ae
+fullfunnel_io
+checkpointgtm_com
+LinkedIn InMail
+Workplace
+NewYork
+PPC Software
+mindmill_dk
+Gemini
+Inbound
+Mail-Signature
+Presearch
+Drda.Io
+poweredbysearch_com
+Content
+Startpage
+Paid Other
+Activecampaign
+Podcast
+Gcp
+nozebra_dk
+TechBBQ
+Demandbase
+Amazon
+The-Marketing-Operations-Strategist.Beehiiv.Com
+Profoundnorth
+Telegram
+mcgaw_io
+Tech Partners
+Qwant
+Microsoft
+sparkforce_dk
+Leadsrx
+Fvtabghef
+Albacross
+Facebook Messenger
+Dreamdata.Org
+Mo Pros
+Bug_Bountry
+Dd-Event
+Vip-Breakfast
+Rachelandreago
+LinkedIn Connection Accepted
+Ines
+Pricing
+my.salesforce.com
+Rss
+Pocket_Mylist
+Becovi
+eliteadvertising_dk
+Www.Dreamdata.Cloud
+Skyamo
+Fzbvy_Fvtabghef
+Dcwoutbound
+Naver
+Www.8020ai.Co
+Login
+Ask.com
+bloxspring_com
+Pocket_Saves
+The Martech Weekly
+Conference
+Partner
+Poe
+Company Journey
+Ocean Hero
+Office Visit
+Jarsdigital
+Copilot
+Cốc Cốc
+Pinterest
+Github
+Scale Smarter
+skjoldby_com
+Pocket_Shared
+
+____________________________________________________
+
+HOSTS (with more than 10 occurences in sessions)
+host
+app.dreamdata.io
+linkedin.com
+dreamdata.io
+docs.dreamdata.io
+developer.dreamdata.io
+dreamdata.storylane.io
+tracking.docs.dreamdata.io
+beta.app.dreamdata.io
+www.linkedin.com
+video.dreamdata.io
+dreamdata-community.slack.com
+analytics-playground.dreamdata.io
+security.dreamdata.io
+dreamdataalternative.com
+osulvc.csb.app
+about
+www.dreamdata.io
+null.jsbin.com
+blhs0y.csb.app
+www.vetstoria.com
+
+
+AUDIENCES
+
+[{
+  "name": "Score 10",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "People who attended B2Believe last year",
+  "description": "Contacts that attended the B2Belive event at least 1 time last year and did not reach NewBiz.",
+  "audience_type": "contacts"
+}, {
+  "name": "People who attended webinars last quarter",
+  "description": "Contacts that attended at least 1 webinar last quarter",
+  "audience_type": "contacts"
+}, {
+  "name": "Accounts in Sales Process",
+  "description": "Companies currently in the sales process",
+  "audience_type": "companies"
+}, {
+  "name": "Target accounts on pricing",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Product Page Signal \u0026 Right size company",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "pricing audience",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Audience Hub Super Users",
+  "description": "",
+  "audience_type": "contacts"
+}, {
+  "name": "Churn Risk Customers (Last 30 Days)",
+  "description": "Customers that viewed the cancellation page at least 1 time in th",
+  "audience_type": "contacts"
+}, {
+  "name": "Broad ICP audience",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "FMF Audience",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Nick Test 6-4",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Highly engaged audience - Software",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "High intent G2",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Website Pricing 14 days \u0026 Target Account",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Product Signal + ICP + No Account Owner",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "test 123 ",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "ICPs (Engagement Score \u003e90%)",
+  "description": "ICPs with an engagement score of more than 90%",
+  "audience_type": "contacts"
+}, {
+  "name": "Nick Test",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Rev Signal or NA based + LinkedIn Ad engagement",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "product pages ",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "Good signal - No owner - Right size",
+  "description": "",
+  "audience_type": "companies"
+}, {
+  "name": "ICP + LinkedIn Engagement + No owner",
+  "description": "",
+  "audience_type": "companies"
+}]

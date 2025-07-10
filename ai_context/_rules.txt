@@ -113,12 +113,48 @@ FROM
     FunnelCounts
 
 
+QUESTION
+how much mql,sql and newbiz did we have last 12 months month by month
+
+ANSWER
+SELECT
+  DATE_TRUNC(DATE(timestamp), MONTH) AS month,
+  COUNT(DISTINCT
+    CASE
+      WHEN stage_name = 'MQL' THEN dd_stage_id
+      ELSE NULL
+  END
+    ) AS mql_count,
+  COUNT(DISTINCT
+    CASE
+      WHEN stage_name = 'SQL' THEN dd_stage_id
+      ELSE NULL
+  END
+    ) AS sql_count,
+  COUNT(DISTINCT
+    CASE
+      WHEN stage_name = 'NewBiz' THEN dd_stage_id
+      ELSE NULL
+  END
+    ) AS newbiz_count
+FROM
+  `[customer table location].stages`
+WHERE
+  timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))
+  AND timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+GROUP BY
+  1
+ORDER BY
+  1
+
+
+
 CAUTION: the stages table by default work at the account or contact level. Some times it is appropriate to look at the deal level. 
 At company level
 SELECT
   ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
 FROM
-  `bi-dreamdata.dreamdata.stages` AS s,
+  `[customer table location].stages` AS s,
   UNNEST(s.stage_transitions) AS st
 WHERE
   s.stage_name = 'SQL'
@@ -130,7 +166,7 @@ At deal level
 SELECT
   ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
 FROM
-  `bi-dreamdata.dreamdata.stages` AS s,
+  `[customer table location].stages` AS s,
   UNNEST(s.stage_transitions) AS st
 WHERE
   s.stage_name = 'SQL'
@@ -146,7 +182,7 @@ First stage
 SELECT
   ROUND(AVG(TIMESTAMP_DIFF(st.timestamp, s.timestamp, DAY)), 2) AS avg_deal_conversion_time_days
 FROM
-  `bi-dreamdata.dreamdata.stages` AS s,
+  `[customer table location].stages` AS s,
   UNNEST(s.stage_transitions) AS st
 WHERE
   s.stage_name = 'SQL'
@@ -581,8 +617,6 @@ ORDER BY
   Attributed_MQLs DESC
 
 
-
-
 ____________________________________________________________________________________________________________________________________
 
 The table "spend"
@@ -782,14 +816,22 @@ BAD
   AND timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
 
 
+"last 12 months" - When asked for last n months / quarters / day make sure to include the end date!!!
+GOOD
+  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))
+  AND s.timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+
+BAD
+  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))
+
 ____________________________________________________________________________________________________________________________________
 
 CAUTION date errors to avoid
 
 TIMESTAMP_SUB does not support the MONTH date part when the argument is TIMESTAMP type
 
-Take extra care around timestamp functions where you often make mistakes. Take care to avoid this: TIMESTAMP_ADD does not support the QUARTER date part when the argument is TIMESTAMP type
-
+EXTREME IMPORTANCE: Take extra care around timestamp functions where you often make mistakes. Take care to avoid this: TIMESTAMP_ADD does not support the QUARTER date part when the argument is TIMESTAMP type
+double check that your SQL is valid for BigQuery
 ____________________________________________________________________________________________________________________________________
 
 CAUTION: Ambiguous Column Names
@@ -972,6 +1014,8 @@ FROM (
 
 QUESTION
 how much newbiz revenue was attributed to paid search happening in 2024?
+EXPLANATION: it is crucial to select whether the date period is the period of spending or of winning. Here the question is about paid ads happening in 2024 so time is for time of spend
+
 
 ANSWER
 SELECT
@@ -985,3 +1029,22 @@ WHERE
   AND r.session.channel = 'Paid Search'
   AND r.timestamp >= TIMESTAMP("2024-01-01")
   AND r.timestamp < TIMESTAMP("2025-01-01")
+
+
+QUESTION
+how much revenue did we generate from linkedin ads we ran in 2024
+EXPLANATION: it is crucial to select whether the date period is the period of spending or of winning. Here the question is about ads run in 2024 so the date must refer to the period of spend
+
+ANSWER
+SELECT
+  ROUND(SUM(a.value),2)
+FROM
+  `[customer table location].attribution` AS r,
+  UNNEST(attribution) AS a
+WHERE
+  a.model = 'Data-Driven'
+  AND r.stage.name = 'NewBiz'
+  AND r.session.channel = 'Paid Social'
+  AND LOWER(r.session.source) = 'linkedin'
+  AND r.timestamp >= TIMESTAMP('2024-01-01')
+  AND r.timestamp < TIMESTAMP('2025-01-01')
