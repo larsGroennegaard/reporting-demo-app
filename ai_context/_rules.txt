@@ -809,8 +809,8 @@ WHERE
 
 "last 24 months"
 GOOD
-  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 24 MONTH))
-  AND s.timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+  timestamp >= TIMESTAMP(DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 24 MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
 BAD
   AND timestamp >= TIMESTAMP_SUB(TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH), INTERVAL 24 MONTH)
   AND timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
@@ -818,11 +818,11 @@ BAD
 
 "last 12 months" - When asked for last n months / quarters / day make sure to include the end date!!!
 GOOD
-  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))
-  AND s.timestamp < TIMESTAMP_TRUNC(CURRENT_TIMESTAMP(), MONTH)
+  timestamp >= TIMESTAMP(DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 12 MONTH))
+  AND timestamp < TIMESTAMP(DATE_TRUNC(CURRENT_DATE(), MONTH))
 
 BAD
-  AND s.timestamp >= TIMESTAMP(DATE_SUB(CURRENT_DATE(), INTERVAL 12 MONTH))
+  timestamp >= TIMESTAMP(DATE_SUB(DATE_TRUNC(CURRENT_DATE(), MONTH), INTERVAL 12 MONTH))
 
 ____________________________________________________________________________________________________________________________________
 
