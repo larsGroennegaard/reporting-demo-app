@@ -94,9 +94,9 @@ export default function AskPage() {
         {messages.length === 0 && (
           <div className="text-center pt-16">
             <Database size={48} className="mx-auto text-gray-500 mb-4" />
-            <h1 className="text-3xl font-bold text-white">Ask Ad-Hoc Questions</h1>
+            <h1 className="text-3xl font-bold text-white">What is your most burning marketing question?</h1>
             <p className="text-gray-400 mt-2">
-              Type a question below to query the database directly.
+              Ask it and I will search through all of your data for the answer.
             </p>
           </div>
         )}
